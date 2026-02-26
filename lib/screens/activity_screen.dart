@@ -32,7 +32,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
     try {
       final patientName = await _secureStorage.read(key: 'patient_name') ?? 'Patient';
 
-      final activitiesData = await _secureStorage.read(key: 'patient_activities');
+      final activitiesData = await _secureStorage.read(key: StorageKeys.activities);
       if (activitiesData != null) {
         final List<dynamic> decoded = jsonDecode(activitiesData);
         _todayActivities = decoded.cast<Map<String, dynamic>>();

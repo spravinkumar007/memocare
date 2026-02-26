@@ -6,11 +6,26 @@ import 'screens/signup_screen.dart';
 import 'screens/real_face_auth_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/emergency_screen.dart';
-import 'screens/reminders_screen.dart';   // ← This was missing
+import 'screens/reminders_screen.dart';
 import 'screens/activity_screen.dart';
+import 'screens/memory_game_screen.dart';
+import 'screens/medication_screen.dart';
+import 'screens/settings_screen.dart';
 import 'constants/storage_keys.dart';
+import 'services/notification_service.dart';
+import 'services/reminder_scheduler.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize notification service
+  final notificationService = NotificationService();
+  await notificationService.init();
+
+  // Start reminder scheduler
+  final scheduler = ReminderScheduler();
+  scheduler.startScheduler();
+
   runApp(const MyApp());
 }
 
@@ -25,12 +40,20 @@ class MyApp extends StatelessWidget {
         primarySwatch: Colors.blue,
         useMaterial3: true,
         fontFamily: 'Roboto',
+
+        // Set scaffold background color to white
+        scaffoldBackgroundColor: Colors.white,
+
+        // Set card color to white
+        cardColor: Colors.white,
+
         appBarTheme: AppBarTheme(
           elevation: 0,
           centerTitle: true,
           backgroundColor: Colors.blue[600],
           foregroundColor: Colors.white,
         ),
+
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: ElevatedButton.styleFrom(
             elevation: 2,
@@ -39,9 +62,10 @@ class MyApp extends StatelessWidget {
             ),
           ),
         ),
+
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
-          fillColor: Colors.grey[100],
+          fillColor: Colors.grey[50],
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
             borderSide: BorderSide(color: Colors.grey[300]!),
@@ -51,8 +75,41 @@ class MyApp extends StatelessWidget {
             borderSide: BorderSide(color: Colors.blue[600]!),
           ),
         ),
+
+        // Text themes with proper colors
+        textTheme: const TextTheme(
+          bodyLarge: TextStyle(color: Colors.black87),
+          bodyMedium: TextStyle(color: Colors.black87),
+          titleLarge: TextStyle(color: Colors.black87),
+          titleMedium: TextStyle(color: Colors.black87),
+        ),
       ),
+
+      darkTheme: ThemeData.dark().copyWith(
+        primaryColor: Colors.blue[700],
+        appBarTheme: AppBarTheme(
+          backgroundColor: Colors.blue[900],
+          foregroundColor: Colors.white,
+        ),
+        scaffoldBackgroundColor: Colors.grey[900],
+        cardColor: Colors.grey[850],
+        inputDecorationTheme: InputDecorationTheme(
+          filled: true,
+          fillColor: Colors.grey[800],
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: Colors.grey[700]!),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: Colors.blue[700]!),
+          ),
+        ),
+      ),
+
+      themeMode: ThemeMode.system,
       home: const SplashScreen(),
+
       routes: {
         '/welcome': (context) => const WelcomeScreen(),
         '/login': (context) => const LoginScreen(),
@@ -60,7 +117,11 @@ class MyApp extends StatelessWidget {
         '/real-face-auth': (context) => const RealFaceAuthScreen(),
         '/dashboard': (context) => const MainApp(),
         '/emergency': (context) => const EmergencyScreen(),
+        '/memory-game': (context) => const MemoryGameScreen(),
+        '/medications': (context) => const MedicationScreen(),
+        '/settings': (context) => const SettingsScreen(),
       },
+
       debugShowCheckedModeBanner: false,
     );
   }
@@ -77,14 +138,17 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
   late AnimationController _animationController;
   late Animation<double> _scaleAnimation;
   late Animation<double> _fadeAnimation;
+  late AnimationController _loadingAnimationController;
 
   String _statusMessage = 'Welcome to MemoCare...';
+  final ReminderScheduler _scheduler = ReminderScheduler();
 
   @override
   void initState() {
     super.initState();
     _initializeAnimations();
     _checkAuthAndNavigate();
+    _initializeServices();
   }
 
   void _initializeAnimations() {
@@ -92,6 +156,11 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
       duration: const Duration(seconds: 2),
       vsync: this,
     );
+
+    _loadingAnimationController = AnimationController(
+      duration: const Duration(milliseconds: 1500),
+      vsync: this,
+    )..repeat();
 
     _scaleAnimation = Tween<double>(
       begin: 0.5,
@@ -112,8 +181,23 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
     _animationController.forward();
   }
 
+  Future<void> _initializeServices() async {
+    // Update status messages during initialization
+    await Future.delayed(const Duration(milliseconds: 500));
+    if (mounted) setState(() => _statusMessage = 'Loading notifications...');
+
+    await Future.delayed(const Duration(milliseconds: 500));
+    if (mounted) setState(() => _statusMessage = 'Checking reminders...');
+
+    // Reschedule any pending reminders
+    await _scheduler.rescheduleAllReminders();
+
+    await Future.delayed(const Duration(milliseconds: 500));
+    if (mounted) setState(() => _statusMessage = 'Almost ready...');
+  }
+
   Future<void> _checkAuthAndNavigate() async {
-    await Future.delayed(const Duration(milliseconds: 2500));
+    await Future.delayed(const Duration(milliseconds: 3000));
 
     const storage = FlutterSecureStorage();
     final isLoggedIn = await storage.read(key: StorageKeys.userLoggedIn) == 'true';
@@ -131,6 +215,7 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
   @override
   void dispose() {
     _animationController.dispose();
+    _loadingAnimationController.dispose();
     super.dispose();
   }
 
@@ -203,15 +288,23 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                         textAlign: TextAlign.center,
                       ),
                       const SizedBox(height: 60),
-                      const SizedBox(
-                        width: 50,
-                        height: 50,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 3,
-                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+
+                      // Animated loading indicator
+                      RotationTransition(
+                        turns: _loadingAnimationController,
+                        child: const SizedBox(
+                          width: 50,
+                          height: 50,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 3,
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          ),
                         ),
                       ),
+
                       const SizedBox(height: 24),
+
+                      // Dynamic status message
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
                         decoration: BoxDecoration(
@@ -226,6 +319,17 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                             fontWeight: FontWeight.w500,
                           ),
                           textAlign: TextAlign.center,
+                        ),
+                      ),
+
+                      const SizedBox(height: 40),
+
+                      // Version info
+                      Text(
+                        'Version 2.0.0',
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.5),
+                          fontSize: 12,
                         ),
                       ),
                     ],
@@ -250,18 +354,115 @@ class MainApp extends StatefulWidget {
 class _MainAppState extends State<MainApp> {
   int _selectedIndex = 0;
   final PageController _pageController = PageController(initialPage: 0);
+  final ReminderScheduler _scheduler = ReminderScheduler();
+  bool _showBadge = false;
 
+  // Updated screens list - removed Settings
   final List<Widget> _screens = [
     const DashboardScreen(),
-    const PlaceholderScreen(title: "Memory Diary", icon: Icons.menu_book),
-    RemindersScreen(), // ← const removed - this fixes the error
+    const MemoryGameScreen(),
+    RemindersScreen(),
+    const MedicationScreen(),
     const EmergencyScreen(),
     const ActivityScreen(),
   ];
 
+  @override
+  void initState() {
+    super.initState();
+    _checkPendingReminders();
+    _scheduler.startScheduler();
+  }
+
+  Future<void> _checkPendingReminders() async {
+    // Check if there are any pending reminders
+    const storage = FlutterSecureStorage();
+    final remindersData = await storage.read(key: StorageKeys.patientReminders);
+    if (remindersData != null) {
+      // Parse and check for incomplete reminders
+      // This is simplified - you'd want to actually parse and check
+      setState(() {
+        _showBadge = true;
+      });
+    }
+  }
+
+  Widget _buildBadge() {
+    if (!_showBadge) return const SizedBox.shrink();
+
+    return Container(
+      width: 10,
+      height: 10,
+      decoration: const BoxDecoration(
+        color: Colors.red,
+        shape: BoxShape.circle,
+      ),
+    );
+  }
+
+  // Updated navigation items - removed Settings
+  List<BottomNavigationBarItem> get _navItems {
+    return [
+      const BottomNavigationBarItem(
+        icon: Icon(Icons.dashboard),
+        activeIcon: Icon(Icons.dashboard),
+        label: 'Dashboard',
+      ),
+      const BottomNavigationBarItem(
+        icon: Icon(Icons.psychology),
+        activeIcon: Icon(Icons.psychology),
+        label: 'Memory',
+      ),
+      BottomNavigationBarItem(
+        icon: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            const Icon(Icons.notifications),
+            Positioned(
+              right: -4,
+              top: -4,
+              child: _buildBadge(),
+            ),
+          ],
+        ),
+        activeIcon: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            const Icon(Icons.notifications),
+            Positioned(
+              right: -2,
+              top: -2,
+              child: _buildBadge(),
+            ),
+          ],
+        ),
+        label: 'Reminders',
+      ),
+      const BottomNavigationBarItem(
+        icon: Icon(Icons.medication),
+        activeIcon: Icon(Icons.medication),
+        label: 'Medication',
+      ),
+      const BottomNavigationBarItem(
+        icon: Icon(Icons.emergency),
+        activeIcon: Icon(Icons.emergency),
+        label: 'Emergency',
+      ),
+      const BottomNavigationBarItem(
+        icon: Icon(Icons.directions_run),
+        activeIcon: Icon(Icons.directions_run),
+        label: 'Activity',
+      ),
+    ];
+  }
+
   void _onItemTapped(int index) {
     setState(() {
       _selectedIndex = index;
+      // Hide badge when reminders screen is opened
+      if (index == 2) {
+        _showBadge = false;
+      }
     });
     _pageController.animateToPage(
       index,
@@ -278,6 +479,10 @@ class _MainAppState extends State<MainApp> {
         onPageChanged: (index) {
           setState(() {
             _selectedIndex = index;
+            // Hide badge when reminders screen is opened
+            if (index == 2) {
+              _showBadge = false;
+            }
           });
         },
         children: _screens,
@@ -298,38 +503,99 @@ class _MainAppState extends State<MainApp> {
           onTap: _onItemTapped,
           selectedItemColor: Colors.blue[600],
           unselectedItemColor: Colors.grey[600],
-          selectedFontSize: 12,
-          unselectedFontSize: 12,
+          selectedFontSize: 11,
+          unselectedFontSize: 11,
           elevation: 0,
           backgroundColor: Colors.white,
-          items: const [
-            BottomNavigationBarItem(
-              icon: Icon(Icons.dashboard),
-              activeIcon: Icon(Icons.dashboard, size: 28),
-              label: 'Dashboard',
+          items: _navItems,
+          iconSize: 22,
+        ),
+      ),
+      floatingActionButton: _selectedIndex == 0
+          ? FloatingActionButton(
+        backgroundColor: Colors.blue[600],
+        onPressed: _showVoiceCommandDialog,
+        child: const Icon(Icons.mic, color: Colors.white),
+      )
+          : null,
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+    );
+  }
+
+  void _showVoiceCommandDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.white,
+        title: const Row(
+          children: [
+            Icon(Icons.mic, color: Colors.blue),
+            SizedBox(width: 8),
+            Text('Voice Command'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.blue[50],
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.keyboard_voice,
+                size: 40,
+                color: Colors.blue,
+              ),
             ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.menu_book),
-              activeIcon: Icon(Icons.menu_book, size: 28),
-              label: 'Memory',
+            const SizedBox(height: 16),
+            const Text(
+              'Listening for commands...',
+              style: TextStyle(fontSize: 16),
             ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.notifications),
-              activeIcon: Icon(Icons.notifications, size: 28),
-              label: 'Reminders',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.emergency),
-              activeIcon: Icon(Icons.emergency, size: 28),
-              label: 'Emergency',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.directions_run),
-              activeIcon: Icon(Icons.directions_run, size: 28),
-              label: 'Activity',
+            const SizedBox(height: 8),
+            const Text(
+              'Try saying: "Show reminders" or "Call emergency"',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+              textAlign: TextAlign.center,
             ),
           ],
         ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+
+    // Simulate voice recognition after 3 seconds
+    Future.delayed(const Duration(seconds: 3), () {
+      if (mounted) {
+        Navigator.pop(context); // Close voice dialog
+        _showVoiceCommandResult();
+      }
+    });
+  }
+
+  void _showVoiceCommandResult() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.white,
+        title: const Text('Command Recognized'),
+        content: const Text('Opening Reminders...'),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _onItemTapped(2); // Navigate to reminders
+            },
+            child: const Text('OK'),
+          ),
+        ],
       ),
     );
   }
@@ -337,152 +603,7 @@ class _MainAppState extends State<MainApp> {
   @override
   void dispose() {
     _pageController.dispose();
+    _scheduler.stopScheduler();
     super.dispose();
-  }
-}
-
-class PlaceholderScreen extends StatelessWidget {
-  final String title;
-  final IconData icon;
-
-  const PlaceholderScreen({
-    super.key,
-    required this.title,
-    this.icon = Icons.construction,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(title),
-        backgroundColor: Colors.blue[600],
-        foregroundColor: Colors.white,
-        elevation: 2,
-        actions: [
-          IconButton(
-            onPressed: () => _showLogoutDialog(context),
-            icon: const Icon(Icons.logout),
-            tooltip: 'Logout',
-          ),
-        ],
-      ),
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Colors.blue[50]!, Colors.white],
-          ),
-        ),
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                width: 120,
-                height: 120,
-                decoration: BoxDecoration(
-                  color: Colors.blue[100],
-                  borderRadius: BorderRadius.circular(60),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.blue.withOpacity(0.3),
-                      blurRadius: 20,
-                      offset: const Offset(0, 10),
-                    ),
-                  ],
-                ),
-                child: Icon(
-                  icon,
-                  size: 60,
-                  color: Colors.blue[600],
-                ),
-              ),
-              const SizedBox(height: 32),
-              Text(
-                '$title Screen',
-                style: const TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black87,
-                ),
-              ),
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
-                decoration: BoxDecoration(
-                  color: Colors.orange[100],
-                  borderRadius: BorderRadius.circular(25),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.construction, color: Colors.orange[700], size: 20),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Coming Soon!',
-                      style: TextStyle(
-                        color: Colors.orange[700],
-                        fontWeight: FontWeight.w600,
-                        fontSize: 16,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 24),
-              const Text(
-                'This feature is under development.\nStay tuned for updates!',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 16,
-                  color: Colors.grey,
-                  height: 1.5,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _showLogoutDialog(BuildContext context) async {
-    final shouldLogout = await showDialog<bool>(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Row(
-            children: [
-              Icon(Icons.logout, color: Colors.red),
-              SizedBox(width: 8),
-              Text('Logout'),
-            ],
-          ),
-          content: const Text('Are you sure you want to logout from MemoCare?'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-              child: const Text('Logout', style: TextStyle(color: Colors.white)),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (shouldLogout == true) {
-      const storage = FlutterSecureStorage();
-      await storage.write(key: StorageKeys.userLoggedIn, value: 'false');
-
-      if (context.mounted) {
-        Navigator.of(context).pushNamedAndRemoveUntil('/welcome', (route) => false);
-      }
-    }
   }
 }
