@@ -78,6 +78,13 @@ class _ActivityCenterScreenState extends State<ActivityCenterScreen> with Ticker
     _initializeSequenceGame();
     _initializeWordGame();
     _initializeNumberGame();
+
+    // Auto-start the first game
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      setState(() {
+        _isGameActive = true;
+      });
+    });
   }
 
   // Game 1: Memory Match Initialization
@@ -92,6 +99,14 @@ class _ActivityCenterScreenState extends State<ActivityCenterScreen> with Ticker
     _matchScore = 0;
     _matchAttempts = 0;
     _matchGameComplete = false;
+  }
+
+  void _resetMatchGame() {
+    setState(() {
+      _initializeMatchGame();
+      _isGameActive = true;
+      _matchGameComplete = false;
+    });
   }
 
   void _onMatchCardTap(int index) {
@@ -112,6 +127,7 @@ class _ActivityCenterScreenState extends State<ActivityCenterScreen> with Ticker
 
           if (_matchMatched.every((m) => m)) {
             _matchGameComplete = true;
+            _isGameActive = false;
           }
 
           _matchFlipped[_matchFlippedIndex] = true;
@@ -150,11 +166,17 @@ class _ActivityCenterScreenState extends State<ActivityCenterScreen> with Ticker
     });
   }
 
+  void _resetSequenceGame() {
+    _initializeSequenceGame();
+    _startSequenceGame();
+  }
+
   void _nextSequenceRound() {
     _sequencePlayerTurn = false;
     _sequencePattern.add(Random().nextInt(9));
 
     int step = 0;
+    _sequenceTimer?.cancel();
     _sequenceTimer = Timer.periodic(const Duration(milliseconds: 500), (timer) {
       if (step < _sequencePattern.length) {
         setState(() {
@@ -233,6 +255,13 @@ class _ActivityCenterScreenState extends State<ActivityCenterScreen> with Ticker
     _wordShowAnswer = false;
   }
 
+  void _resetWordGame() {
+    setState(() {
+      _initializeWordGame();
+      _isGameActive = true;
+    });
+  }
+
   void _checkWordAnswer(bool userAnswer) {
     if (!_isGameActive) return;
 
@@ -274,6 +303,7 @@ class _ActivityCenterScreenState extends State<ActivityCenterScreen> with Ticker
       _generateNewMatrix();
     });
 
+    _numberTimer?.cancel();
     _numberTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       setState(() {
         if (_numberTimeLeft > 0) {
@@ -288,6 +318,11 @@ class _ActivityCenterScreenState extends State<ActivityCenterScreen> with Ticker
     });
   }
 
+  void _resetNumberGame() {
+    _numberTimer?.cancel();
+    _startNumberGame();
+  }
+
   void _onNumberTap(int row, int col) {
     if (!_isGameActive) return;
 
@@ -300,7 +335,6 @@ class _ActivityCenterScreenState extends State<ActivityCenterScreen> with Ticker
   }
 
   void _logout() {
-    // Implement logout functionality
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -367,12 +401,28 @@ class _ActivityCenterScreenState extends State<ActivityCenterScreen> with Ticker
                   onTap: () {
                     setState(() {
                       _selectedGameIndex = index;
-                      _isGameActive = false;
+                      _isGameActive = true; // Auto-activate game when switching
                       _pageController.animateToPage(
                         index,
                         duration: const Duration(milliseconds: 300),
                         curve: Curves.easeInOut,
                       );
+
+                      // Reset the appropriate game when switching
+                      switch (index) {
+                        case 0:
+                          _resetMatchGame();
+                          break;
+                        case 1:
+                          _resetSequenceGame();
+                          break;
+                        case 2:
+                          _resetWordGame();
+                          break;
+                        case 3:
+                          _resetNumberGame();
+                          break;
+                      }
                     });
                   },
                   child: Container(
@@ -426,7 +476,23 @@ class _ActivityCenterScreenState extends State<ActivityCenterScreen> with Ticker
         onPageChanged: (index) {
           setState(() {
             _selectedGameIndex = index;
-            _isGameActive = false;
+            _isGameActive = true; // Auto-activate game when swiping
+
+            // Reset the appropriate game when switching
+            switch (index) {
+              case 0:
+                _resetMatchGame();
+                break;
+              case 1:
+                _resetSequenceGame();
+                break;
+              case 2:
+                _resetWordGame();
+                break;
+              case 3:
+                _resetNumberGame();
+                break;
+            }
           });
         },
         children: [
@@ -477,12 +543,7 @@ class _ActivityCenterScreenState extends State<ActivityCenterScreen> with Ticker
                   ],
                 ),
                 ElevatedButton(
-                  onPressed: () {
-                    setState(() {
-                      _initializeMatchGame();
-                      _isGameActive = true;
-                    });
-                  },
+                  onPressed: _resetMatchGame,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.purple,
                     foregroundColor: Colors.white,
@@ -549,23 +610,59 @@ class _ActivityCenterScreenState extends State<ActivityCenterScreen> with Ticker
           if (_matchGameComplete)
             Container(
               margin: const EdgeInsets.all(16),
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
                 color: Colors.green[100],
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.green),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.green, width: 2),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.green.withOpacity(0.3),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
               ),
               child: Column(
                 children: [
+                  const Icon(Icons.emoji_events, color: Colors.amber, size: 50),
+                  const SizedBox(height: 12),
                   const Text(
                     '🎉 Congratulations! 🎉',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.green),
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.green,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'You completed the game in $_matchAttempts attempts!',
+                    style: const TextStyle(
+                      fontSize: 18,
+                      color: Colors.black87,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'You completed the game in $_matchAttempts attempts!\nScore: $_matchScore',
-                    style: const TextStyle(fontSize: 16),
+                    'Score: $_matchScore',
+                    style: const TextStyle(
+                      fontSize: 22,
+                      color: Colors.purple,
+                      fontWeight: FontWeight.bold,
+                    ),
                     textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: _resetMatchGame,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.purple,
+                      foregroundColor: Colors.white,
+                    ),
+                    child: const Text('Play Again'),
                   ),
                 ],
               ),
@@ -606,12 +703,12 @@ class _ActivityCenterScreenState extends State<ActivityCenterScreen> with Ticker
                   ],
                 ),
                 ElevatedButton(
-                  onPressed: _startSequenceGame,
+                  onPressed: _resetSequenceGame,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.blue,
                     foregroundColor: Colors.white,
                   ),
-                  child: const Text('Start Game'),
+                  child: const Text('New Game'),
                 ),
               ],
             ),
@@ -699,12 +796,7 @@ class _ActivityCenterScreenState extends State<ActivityCenterScreen> with Ticker
                   ],
                 ),
                 ElevatedButton(
-                  onPressed: () {
-                    setState(() {
-                      _initializeWordGame();
-                      _isGameActive = true;
-                    });
-                  },
+                  onPressed: _resetWordGame,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.green,
                     foregroundColor: Colors.white,
@@ -735,7 +827,7 @@ class _ActivityCenterScreenState extends State<ActivityCenterScreen> with Ticker
                 children: [
                   Text(
                     _wordPairs[_wordCurrentIndex].split('-')[0],
-                    style: const TextStyle(fontSize: 40, fontWeight: FontWeight.bold),
+                    style: const TextStyle(fontSize: 40, fontWeight: FontWeight.bold, color: Colors.black87),
                   ),
                   const SizedBox(height: 20),
                   const Text(
@@ -745,7 +837,7 @@ class _ActivityCenterScreenState extends State<ActivityCenterScreen> with Ticker
                   const SizedBox(height: 10),
                   Text(
                     _wordPairs[_wordCurrentIndex].split('-')[1],
-                    style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w500),
+                    style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w500, color: Colors.black87),
                   ),
                   const SizedBox(height: 30),
                   Row(
@@ -757,7 +849,7 @@ class _ActivityCenterScreenState extends State<ActivityCenterScreen> with Ticker
                             backgroundColor: Colors.green,
                             padding: const EdgeInsets.symmetric(vertical: 16),
                           ),
-                          child: const Text('Yes', style: TextStyle(fontSize: 18)),
+                          child: const Text('Yes', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                         ),
                       ),
                       const SizedBox(width: 16),
@@ -768,7 +860,7 @@ class _ActivityCenterScreenState extends State<ActivityCenterScreen> with Ticker
                             backgroundColor: Colors.red,
                             padding: const EdgeInsets.symmetric(vertical: 16),
                           ),
-                          child: const Text('No', style: TextStyle(fontSize: 18)),
+                          child: const Text('No', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                         ),
                       ),
                     ],
@@ -782,20 +874,44 @@ class _ActivityCenterScreenState extends State<ActivityCenterScreen> with Ticker
               decoration: BoxDecoration(
                 color: Colors.green[100],
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: Colors.green),
+                border: Border.all(color: Colors.green, width: 2),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.green.withOpacity(0.3),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
               ),
               child: Column(
                 children: [
                   const Icon(Icons.celebration, size: 60, color: Colors.green),
                   const SizedBox(height: 16),
-                  Text(
-                    'Game Complete!',
-                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.green[800]),
+                  const Text(
+                    '🎉 Game Complete! 🎉',
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.green,
+                    ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 12),
                   Text(
                     'Your Score: $_wordScore',
-                    style: const TextStyle(fontSize: 20),
+                    style: const TextStyle(
+                      fontSize: 22,
+                      color: Colors.purple,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: _resetWordGame,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green,
+                      foregroundColor: Colors.white,
+                    ),
+                    child: const Text('Play Again'),
                   ),
                 ],
               ),
@@ -836,12 +952,12 @@ class _ActivityCenterScreenState extends State<ActivityCenterScreen> with Ticker
                   ],
                 ),
                 ElevatedButton(
-                  onPressed: _startNumberGame,
+                  onPressed: _resetNumberGame,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.orange,
                     foregroundColor: Colors.white,
                   ),
-                  child: const Text('Start Game'),
+                  child: const Text('New Game'),
                 ),
               ],
             ),

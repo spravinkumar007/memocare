@@ -16,8 +16,8 @@ class VoiceAssistantService {
   final Function() onRemindersRequest;
   final Function() onEmergencyRequest;
   final Function() onMedicationRequest;
-  final Function() onActivityRequest;
-  final Function() onMemoryGameRequest;
+  final Function() onActivityRequest;        // This should open Memory Diary
+  final Function() onMemoryGameRequest;      // This should open Games
   final Function(String) onCallContactRequest;
   final Function() onDashboardRequest;
   final Function() onSettingsRequest;
@@ -148,17 +148,20 @@ class VoiceAssistantService {
       await speak("Opening medication tracker");
       onMedicationRequest();
     }
-    else if (command.contains('activity') ||
-        command.contains('exercise') ||
-        command.contains('walk')) {
-      await speak("Opening activities");
-      onActivityRequest();
+    // MEMORY DIARY COMMANDS - Now opens the correct screen
+    else if (command.contains('memory diary') ||
+        command.contains('diary') ||
+        command.contains('memories') ||
+        command.contains('memory book')) {
+      await speak("Opening memory diary");
+      onActivityRequest(); // This maps to Memory Diary screen (index 5)
     }
-    else if (command.contains('memory') ||
-        command.contains('game') ||
-        command.contains('brain')) {
-      await speak("Opening memory game");
-      onMemoryGameRequest();
+    // GAMES COMMANDS - Opens the Games screen
+    else if (command.contains('game') ||
+        command.contains('games') ||
+        command.contains('play')) {
+      await speak("Opening games");
+      onMemoryGameRequest(); // This maps to Games screen (index 1)
     }
     else if (command.contains('dashboard') ||
         command.contains('home') ||
@@ -191,7 +194,7 @@ class VoiceAssistantService {
     else if (command.contains('help') || command.contains('what can')) {
       await speak(
           "You can say: open reminders, call emergency, show medications, "
-              "start activity, play memory game, go to dashboard, or open settings"
+              "open memory diary, play games, go to dashboard, or open settings"
       );
     }
 

@@ -93,12 +93,19 @@ class _VoiceAssistantWidgetState extends State<VoiceAssistantWidget>
 
   @override
   Widget build(BuildContext context) {
+    // Get screen size for responsive design
+    final screenHeight = MediaQuery.of(context).size.height;
+    final screenWidth = MediaQuery.of(context).size.width;
+
     return Dialog(
       backgroundColor: Colors.transparent,
       elevation: 0,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
       child: Container(
-        width: MediaQuery.of(context).size.width * 0.9,
+        width: screenWidth * 0.9,
+        constraints: BoxConstraints(
+          maxHeight: screenHeight * 0.8,
+        ),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(30),
@@ -182,7 +189,7 @@ class _VoiceAssistantWidgetState extends State<VoiceAssistantWidget>
 
                     const SizedBox(height: 12),
 
-                    // Example Commands
+                    // Example Commands - UPDATED with Memory Diary
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
@@ -214,8 +221,8 @@ class _VoiceAssistantWidgetState extends State<VoiceAssistantWidget>
                               _buildExampleChip('Reminders', Icons.notifications),
                               _buildExampleChip('Emergency', Icons.emergency),
                               _buildExampleChip('Medications', Icons.medication),
-                              _buildExampleChip('Memory game', Icons.psychology),
-                              _buildExampleChip('Activity', Icons.directions_run),
+                              _buildExampleChip('Memory diary', Icons.menu_book), // Changed from Activity
+                              _buildExampleChip('Games', Icons.extension), // Changed from Memory game
                               _buildExampleChip('Dashboard', Icons.dashboard),
                               _buildExampleChip('Settings', Icons.settings),
                               _buildExampleChip('Help', Icons.help),
