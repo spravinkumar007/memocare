@@ -4,7 +4,9 @@ import 'dart:convert';
 import 'package:intl/intl.dart';
 
 class MedicationScreen extends StatefulWidget {
-  const MedicationScreen({super.key});
+  final Function? onVoiceAssistantPressed;
+
+  const MedicationScreen({super.key, this.onVoiceAssistantPressed});
 
   @override
   State<MedicationScreen> createState() => _MedicationScreenState();
@@ -670,6 +672,42 @@ class _MedicationScreenState extends State<MedicationScreen> {
         foregroundColor: Colors.white,
         elevation: 0,
         actions: [
+          // Refill Reminder Bell Button
+          IconButton(
+            onPressed: _showRefillReminder,
+            icon: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                const Icon(Icons.notifications, color: Colors.white, size: 24),
+                // Add badge if there are medications needing refill soon
+                if (_medications.any((m) {
+                  final refill = DateTime.tryParse(m['refillDate'] ?? '');
+                  return refill != null && refill.difference(DateTime.now()).inDays <= 3;
+                }))
+                  Positioned(
+                    right: -2,
+                    top: -2,
+                    child: Container(
+                      width: 10,
+                      height: 10,
+                      decoration: const BoxDecoration(
+                        color: Colors.red,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            tooltip: 'Refill Reminders',
+          ),
+          // Voice Assistant Button
+          if (widget.onVoiceAssistantPressed != null)
+            IconButton(
+              onPressed: () => widget.onVoiceAssistantPressed!(),
+              icon: const Icon(Icons.mic, color: Colors.white),
+              tooltip: 'Voice Assistant',
+            ),
+          // Logout Button
           IconButton(
             onPressed: _logout,
             icon: const Icon(Icons.logout, color: Colors.white),
@@ -783,13 +821,6 @@ class _MedicationScreenState extends State<MedicationScreen> {
           const SizedBox(height: 100),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _showRefillReminder,
-        backgroundColor: Colors.teal[600],
-        elevation: 8,
-        child: const Icon(Icons.notification_important, color: Colors.white),
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
     );
   }
 

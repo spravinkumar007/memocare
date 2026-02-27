@@ -6,7 +6,7 @@ plugins {
 android {
     namespace = "com.example.memocare_1"
     compileSdk = flutter.compileSdkVersion.toInt()
-    ndkVersion = flutter.ndkVersion
+    ndkVersion = "28.0.13004108"
 
     compileOptions {
         isCoreLibraryDesugaringEnabled = true

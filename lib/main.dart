@@ -8,12 +8,14 @@ import 'screens/dashboard_screen.dart';
 import 'screens/emergency_screen.dart';
 import 'screens/reminders_screen.dart';
 import 'screens/activity_screen.dart';
-import 'screens/memory_game_screen.dart';
+import 'screens/activity_center_screen.dart';
 import 'screens/medication_screen.dart';
 import 'screens/settings_screen.dart';
 import 'constants/storage_keys.dart';
 import 'services/notification_service.dart';
 import 'services/reminder_scheduler.dart';
+import 'services/voice_assistant_service.dart';
+import 'widgets/voice_assistant_widget.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -117,7 +119,9 @@ class MyApp extends StatelessWidget {
         '/real-face-auth': (context) => const RealFaceAuthScreen(),
         '/dashboard': (context) => const MainApp(),
         '/emergency': (context) => const EmergencyScreen(),
-        '/memory-game': (context) => const MemoryGameScreen(),
+        '/activity-center': (context) => ActivityCenterScreen(
+          onVoiceAssistantPressed: () {}, // This will be overridden in MainApp
+        ),
         '/medications': (context) => const MedicationScreen(),
         '/settings': (context) => const SettingsScreen(),
       },
@@ -357,21 +361,108 @@ class _MainAppState extends State<MainApp> {
   final ReminderScheduler _scheduler = ReminderScheduler();
   bool _showBadge = false;
 
-  // Updated screens list - removed Settings
-  final List<Widget> _screens = [
-    const DashboardScreen(),
-    const MemoryGameScreen(),
-    RemindersScreen(),
-    const MedicationScreen(),
-    const EmergencyScreen(),
-    const ActivityScreen(),
-  ];
+  // Voice Assistant
+  late VoiceAssistantService _voiceService;
+  bool _showVoiceAssistant = false;
+
+  // Screens list
+  late final List<Widget> _screens;
 
   @override
   void initState() {
     super.initState();
+    _initVoiceAssistant();
     _checkPendingReminders();
     _scheduler.startScheduler();
+
+    // Initialize screens with callbacks - USING CONSTRUCTOR APPROACH
+    _screens = [
+      const DashboardScreen(),
+      ActivityCenterScreen(
+        onVoiceAssistantPressed: _showVoiceAssistantDialog,
+      ),
+      RemindersScreen(),
+      MedicationScreen(
+        onVoiceAssistantPressed: _showVoiceAssistantDialog,
+      ),
+      const EmergencyScreen(),
+      const ActivityScreen(), // This is the Memory Diary screen
+    ];
+  }
+
+  Future<void> _initVoiceAssistant() async {
+    _voiceService = VoiceAssistantService(
+      onRemindersRequest: () {
+        _navigateToScreen(2); // Reminders index
+      },
+      onEmergencyRequest: () {
+        _navigateToScreen(4); // Emergency index
+      },
+      onMedicationRequest: () {
+        _navigateToScreen(3); // Medication index
+      },
+      onActivityRequest: () {
+        _navigateToScreen(5); // Memory Diary index (was Activity)
+      },
+      onMemoryGameRequest: () {
+        _navigateToScreen(1); // Games index
+      },
+      onDashboardRequest: () {
+        _navigateToScreen(0); // Dashboard index
+      },
+      onSettingsRequest: () {
+        _showSettingsFromVoice();
+      },
+      onCallContactRequest: (name) {
+        _handleCallContact(name);
+      },
+      onCustomCommand: (command) {
+        _handleCustomCommand(command);
+      },
+    );
+
+    await _voiceService.initialize();
+    await _voiceService.requestPermissions();
+  }
+
+  void _navigateToScreen(int index) {
+    setState(() {
+      _selectedIndex = index;
+    });
+    _pageController.jumpToPage(index);
+  }
+
+  void _showSettingsFromVoice() {
+    _voiceService.speak("Opening settings from menu");
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Open settings from the menu drawer'),
+        duration: Duration(seconds: 2),
+        backgroundColor: Colors.blue,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  void _handleCallContact(String name) {
+    _voiceService.speak("Calling $name");
+    // Navigate to emergency screen where contacts are shown
+    _navigateToScreen(4); // Go to emergency
+  }
+
+  void _handleCustomCommand(String command) {
+    if (command.contains('help')) {
+      _voiceService.speak(
+          "You can say: open reminders, call emergency, show medications, "
+              "open memory diary, play games, go to dashboard, or open settings"
+      );
+    } else if (command.contains('game') || command.contains('play')) {
+      _navigateToScreen(1); // Navigate to games
+    } else if (command.contains('diary') || command.contains('memory diary')) {
+      _navigateToScreen(5); // Navigate to memory diary
+    } else {
+      _voiceService.speak("I didn't understand. Say 'help' for commands.");
+    }
   }
 
   Future<void> _checkPendingReminders() async {
@@ -400,7 +491,7 @@ class _MainAppState extends State<MainApp> {
     );
   }
 
-  // Updated navigation items - removed Settings
+  // Updated navigation items with "Memory Diary" as the last option
   List<BottomNavigationBarItem> get _navItems {
     return [
       const BottomNavigationBarItem(
@@ -409,9 +500,9 @@ class _MainAppState extends State<MainApp> {
         label: 'Dashboard',
       ),
       const BottomNavigationBarItem(
-        icon: Icon(Icons.psychology),
-        activeIcon: Icon(Icons.psychology),
-        label: 'Memory',
+        icon: Icon(Icons.extension),
+        activeIcon: Icon(Icons.extension),
+        label: 'Games',
       ),
       BottomNavigationBarItem(
         icon: Stack(
@@ -449,9 +540,9 @@ class _MainAppState extends State<MainApp> {
         label: 'Emergency',
       ),
       const BottomNavigationBarItem(
-        icon: Icon(Icons.directions_run),
-        activeIcon: Icon(Icons.directions_run),
-        label: 'Activity',
+        icon: Icon(Icons.menu_book), // Changed from Icons.directions_run
+        activeIcon: Icon(Icons.menu_book),
+        label: 'Memory', // Changed from 'Activity'
       ),
     ];
   }
@@ -468,6 +559,26 @@ class _MainAppState extends State<MainApp> {
       index,
       duration: const Duration(milliseconds: 300),
       curve: Curves.easeInOut,
+    );
+  }
+
+  void _showVoiceAssistantDialog() {
+    setState(() {
+      _showVoiceAssistant = true;
+    });
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => VoiceAssistantWidget(
+        service: _voiceService,
+        onClose: () {
+          Navigator.pop(context);
+          setState(() {
+            _showVoiceAssistant = false;
+          });
+        },
+      ),
     );
   }
 
@@ -511,92 +622,16 @@ class _MainAppState extends State<MainApp> {
           iconSize: 22,
         ),
       ),
-      floatingActionButton: _selectedIndex == 0
-          ? FloatingActionButton(
-        backgroundColor: Colors.blue[600],
-        onPressed: _showVoiceCommandDialog,
-        child: const Icon(Icons.mic, color: Colors.white),
-      )
-          : null,
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: _showVoiceAssistant ? Colors.green : Colors.blue[600],
+        onPressed: _showVoiceAssistantDialog,
+        child: Icon(
+          _showVoiceAssistant ? Icons.voice_chat : Icons.mic,
+          color: Colors.white,
+        ),
+        mini: true,
+      ),
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
-    );
-  }
-
-  void _showVoiceCommandDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Colors.white,
-        title: const Row(
-          children: [
-            Icon(Icons.mic, color: Colors.blue),
-            SizedBox(width: 8),
-            Text('Voice Command'),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: Colors.blue[50],
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.keyboard_voice,
-                size: 40,
-                color: Colors.blue,
-              ),
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'Listening for commands...',
-              style: TextStyle(fontSize: 16),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Try saying: "Show reminders" or "Call emergency"',
-              style: TextStyle(fontSize: 12, color: Colors.grey),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-        ],
-      ),
-    );
-
-    // Simulate voice recognition after 3 seconds
-    Future.delayed(const Duration(seconds: 3), () {
-      if (mounted) {
-        Navigator.pop(context); // Close voice dialog
-        _showVoiceCommandResult();
-      }
-    });
-  }
-
-  void _showVoiceCommandResult() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Colors.white,
-        title: const Text('Command Recognized'),
-        content: const Text('Opening Reminders...'),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _onItemTapped(2); // Navigate to reminders
-            },
-            child: const Text('OK'),
-          ),
-        ],
-      ),
     );
   }
 
@@ -604,6 +639,7 @@ class _MainAppState extends State<MainApp> {
   void dispose() {
     _pageController.dispose();
     _scheduler.stopScheduler();
+    _voiceService.dispose();
     super.dispose();
   }
 }

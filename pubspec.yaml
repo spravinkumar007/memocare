@@ -17,7 +17,7 @@ dependencies:
   # Camera & ML
   camera: ^0.10.5
   google_ml_kit: ^0.16.0
-  permission_handler: ^11.0.1
+
 
   # File handling
   path_provider: ^2.1.1
@@ -43,6 +43,11 @@ dependencies:
   # Utils
   intl: ^0.18.1
   uuid: ^4.3.3
+
+  # Add these if missing
+  speech_to_text: ^7.0.0
+  flutter_tts: ^4.1.0
+  permission_handler: ^11.3.1
 
 dev_dependencies:
   flutter_test:
