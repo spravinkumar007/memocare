@@ -153,7 +153,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   void _navigateToEditProfile() {
-    // Navigate to edit profile screen
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('Edit Profile feature coming soon!'),
@@ -164,7 +163,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   void _navigateToAboutPatient() {
-    // Show patient details in a dialog
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -219,13 +217,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   String _getGreeting() {
     final hour = DateTime.now().hour;
-    if (hour < 12) {
-      return 'Good Morning';
-    } else if (hour < 17) {
-      return 'Good Afternoon';
-    } else {
-      return 'Good Evening';
-    }
+    if (hour < 12) return 'Good Morning';
+    if (hour < 17) return 'Good Afternoon';
+    return 'Good Evening';
   }
 
   String _getCurrentDate() {
@@ -283,7 +277,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
           color: Colors.white,
           child: Column(
             children: [
-              // Drawer Header with Gradient and Profile Info
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(20),
@@ -311,14 +304,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const SizedBox(height: 20),
-                      // Profile Avatar with Gradient Border
                       Container(
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          border: Border.all(
-                            color: Colors.white,
-                            width: 3,
-                          ),
+                          border: Border.all(color: Colors.white, width: 3),
                           boxShadow: [
                             BoxShadow(
                               color: Colors.white.withOpacity(0.3),
@@ -332,33 +321,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           backgroundColor: Colors.white,
                           child: Text(
                             _patientName.isNotEmpty ? _patientName[0].toUpperCase() : 'U',
-                            style: const TextStyle(
-                              fontSize: 32,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFF1976D2),
-                            ),
+                            style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Color(0xFF1976D2)),
                           ),
                         ),
                       ),
                       const SizedBox(height: 16),
-                      // Patient Name
                       Text(
                         _patientName,
-                        style: const TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                          shadows: [
-                            Shadow(
-                              color: Colors.black26,
-                              blurRadius: 5,
-                              offset: Offset(0, 2),
-                            ),
-                          ],
-                        ),
+                        style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
                       ),
                       const SizedBox(height: 4),
-                      // Email with Icon
                       Row(
                         children: [
                           const Icon(Icons.email_outlined, color: Colors.white70, size: 16),
@@ -366,17 +338,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           Expanded(
                             child: Text(
                               _userEmail.isNotEmpty ? _userEmail : 'No email',
-                              style: const TextStyle(
-                                fontSize: 14,
-                                color: Colors.white70,
-                              ),
+                              style: const TextStyle(fontSize: 14, color: Colors.white70),
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 8),
-                      // Phone if available
                       if (_patientPhone.isNotEmpty)
                         Row(
                           children: [
@@ -384,27 +351,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             const SizedBox(width: 8),
                             Text(
                               _patientPhone,
-                              style: const TextStyle(
-                                fontSize: 14,
-                                color: Colors.white70,
-                              ),
+                              style: const TextStyle(fontSize: 14, color: Colors.white70),
                             ),
                           ],
                         ),
-                      const SizedBox(height: 20),
                     ],
                   ),
                 ),
               ),
-
-              // Drawer Menu Items with improved styling
               Expanded(
                 child: ListView(
                   padding: const EdgeInsets.symmetric(vertical: 8),
                   children: [
-                    const SizedBox(height: 8),
-
-                    // Edit Profile
                     _buildDrawerItem(
                       icon: Icons.person_outline,
                       title: 'Edit Profile',
@@ -412,8 +370,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       color: Colors.blue,
                       onTap: _navigateToEditProfile,
                     ),
-
-                    // About Patient Details
                     _buildDrawerItem(
                       icon: Icons.info_outline,
                       title: 'About Patient Details',
@@ -421,8 +377,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       color: Colors.green,
                       onTap: _navigateToAboutPatient,
                     ),
-
-                    // Settings
                     _buildDrawerItem(
                       icon: Icons.settings_outlined,
                       title: 'Settings',
@@ -430,10 +384,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       color: Colors.orange,
                       onTap: _navigateToSettings,
                     ),
-
                     const Divider(height: 32, indent: 20, endIndent: 20),
-
-                    // Logout
                     _buildDrawerItem(
                       icon: Icons.logout,
                       title: 'Logout',
@@ -445,15 +396,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ],
                 ),
               ),
-
-              // Version Info at Bottom with improved styling
               Container(
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
                   color: Colors.grey[50],
-                  border: Border(
-                    top: BorderSide(color: Colors.grey[200]!),
-                  ),
+                  border: Border(top: BorderSide(color: Colors.grey[200]!)),
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -471,11 +418,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         const SizedBox(width: 8),
                         Text(
                           'Version 2.0.0',
-                          style: TextStyle(
-                            color: Colors.grey[600],
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
-                          ),
+                          style: TextStyle(color: Colors.grey[600], fontSize: 13, fontWeight: FontWeight.w500),
                         ),
                       ],
                     ),
@@ -490,19 +433,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           Container(
                             width: 8,
                             height: 8,
-                            decoration: const BoxDecoration(
-                              color: Colors.green,
-                              shape: BoxShape.circle,
-                            ),
+                            decoration: const BoxDecoration(color: Colors.green, shape: BoxShape.circle),
                           ),
                           const SizedBox(width: 4),
                           Text(
                             'Active',
-                            style: TextStyle(
-                              color: Colors.green[700],
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                            ),
+                            style: TextStyle(color: Colors.green[700], fontSize: 11, fontWeight: FontWeight.w600),
                           ),
                         ],
                       ),
@@ -517,7 +453,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // Fixed Header with Gradient (3D shadow)
+            // Fixed Header with Gradient
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(20),
@@ -537,43 +473,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     blurRadius: 20,
                     offset: const Offset(0, 10),
                   ),
-                  BoxShadow(
-                    color: Colors.blue.withOpacity(0.2),
-                    blurRadius: 40,
-                    offset: const Offset(0, 15),
-                  ),
                 ],
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Top row with greeting only (menu is in AppBar)
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         '${_getGreeting()},',
-                        style: const TextStyle(
-                          fontSize: 16,
-                          color: Colors.white70,
-                          fontWeight: FontWeight.w400,
-                        ),
+                        style: const TextStyle(fontSize: 16, color: Colors.white70, fontWeight: FontWeight.w400),
                       ),
                       const SizedBox(height: 4),
                       Text(
                         _patientName,
-                        style: const TextStyle(
-                          fontSize: 24,
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                        ),
+                        style: const TextStyle(fontSize: 24, color: Colors.white, fontWeight: FontWeight.bold),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ],
                   ),
                   const SizedBox(height: 20),
-
-                  // Date and Weather row
                   Row(
                     children: [
                       Container(
@@ -581,13 +501,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         decoration: BoxDecoration(
                           color: Colors.white.withOpacity(0.2),
                           borderRadius: BorderRadius.circular(8),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.white.withOpacity(0.1),
-                              blurRadius: 8,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
                         ),
                         child: const Icon(Icons.calendar_today, color: Colors.white, size: 16),
                       ),
@@ -598,46 +511,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           children: [
                             Text(
                               _getCurrentDate(),
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                              ),
+                              style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600),
                             ),
                             Text(
                               _getCurrentTime(),
-                              style: const TextStyle(
-                                color: Colors.white70,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(20),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.white.withOpacity(0.1),
-                              blurRadius: 8,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.wb_sunny, color: Colors.white, size: 16),
-                            const SizedBox(width: 4),
-                            Text(
-                              '72°F',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                              ),
+                              style: const TextStyle(color: Colors.white70, fontSize: 12),
                             ),
                           ],
                         ),
@@ -647,13 +525,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ],
               ),
             ),
-
             // Scrollable Content
             Expanded(
               child: ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
-                  // Face Authentication Status Card (3D)
+                  // Face Authentication Status Card
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(16),
@@ -665,11 +542,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           color: Colors.green.withOpacity(0.2),
                           blurRadius: 15,
                           offset: const Offset(0, 8),
-                        ),
-                        BoxShadow(
-                          color: Colors.green.withOpacity(0.1),
-                          blurRadius: 30,
-                          offset: const Offset(0, 15),
                         ),
                       ],
                     ),
@@ -697,18 +569,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             children: [
                               const Text(
                                 'Face Authentication',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.black87,
-                                ),
+                                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87),
                               ),
                               Text(
                                 'Successfully authenticated!',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: Colors.green[700],
-                                ),
+                                style: TextStyle(fontSize: 14, color: Colors.green[700]),
                               ),
                             ],
                           ),
@@ -718,30 +583,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           decoration: BoxDecoration(
                             color: Colors.green,
                             borderRadius: BorderRadius.circular(30),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.green.withOpacity(0.3),
-                                blurRadius: 8,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
                           ),
                           child: const Text(
                             'Verified',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            ),
+                            style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
                           ),
                         ),
                       ],
                     ),
                   ),
-
                   const SizedBox(height: 20),
-
-                  // Welcome Message (3D)
+                  // Welcome Message
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(20),
@@ -754,11 +606,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           blurRadius: 15,
                           offset: const Offset(0, 8),
                         ),
-                        BoxShadow(
-                          color: Colors.blue.withOpacity(0.1),
-                          blurRadius: 30,
-                          offset: const Offset(0, 15),
-                        ),
                       ],
                     ),
                     child: Column(
@@ -768,40 +615,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           decoration: BoxDecoration(
                             color: Colors.blue[50],
                             shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.blue.withOpacity(0.2),
-                                blurRadius: 10,
-                                offset: const Offset(0, 5),
-                              ),
-                            ],
                           ),
                           child: const Icon(Icons.waving_hand, color: Colors.blue, size: 30),
                         ),
                         const SizedBox(height: 12),
                         const Text(
                           'Welcome to MemoCare!',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.blue,
-                          ),
+                          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.blue),
                         ),
                         const SizedBox(height: 4),
                         Text(
                           'We\'re here to help you stay on track',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey[600],
-                          ),
+                          style: TextStyle(fontSize: 14, color: Colors.grey[600]),
                         ),
                       ],
                     ),
                   ),
-
                   const SizedBox(height: 20),
-
-                  // Patient Information Section (3D Card)
+                  // Patient Information Section
                   _build3DCard(
                     'Patient Information',
                     Icons.person,
@@ -817,10 +648,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       if (_allergies.isNotEmpty) _buildInfoRow('Allergies', _allergies, Icons.warning_outlined),
                     ],
                   ),
-
                   const SizedBox(height: 16),
-
-                  // Primary Caregiver Section (3D Card)
+                  // Primary Caregiver Section
                   if (_caretakerName.isNotEmpty)
                     _build3DCard(
                       'Primary Caregiver',
@@ -834,10 +663,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         if (_caretakerAddress.isNotEmpty) _buildInfoRow('Address', _caretakerAddress, Icons.home_outlined),
                       ],
                     ),
-
                   const SizedBox(height: 16),
-
-                  // Emergency Contacts Section (3D Card)
+                  // Emergency Contacts Section
                   if (_emergencyContacts.isNotEmpty)
                     _build3DCard(
                       'Emergency Contacts',
@@ -858,11 +685,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               ),
                               child: Text(
                                 'Emergency Contact ${index + 1}',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.red[700],
-                                ),
+                                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.red[700]),
                               ),
                             ),
                             const SizedBox(height: 8),
@@ -873,7 +696,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         );
                       }).toList(),
                     ),
-
                   const SizedBox(height: 20),
                 ],
               ),
@@ -905,10 +727,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [
-                color.withOpacity(0.1),
-                color.withOpacity(0.2),
-              ],
+              colors: [color.withOpacity(0.1), color.withOpacity(0.2)],
             ),
             borderRadius: BorderRadius.circular(12),
             boxShadow: [
@@ -931,10 +750,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ),
         subtitle: Text(
           subtitle,
-          style: TextStyle(
-            fontSize: 12,
-            color: Colors.grey[600],
-          ),
+          style: TextStyle(fontSize: 12, color: Colors.grey[600]),
         ),
         trailing: Container(
           padding: const EdgeInsets.all(6),
@@ -942,21 +758,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
             color: color.withOpacity(0.1),
             shape: BoxShape.circle,
           ),
-          child: Icon(
-            Icons.arrow_forward_ios,
-            color: color,
-            size: 14,
-          ),
+          child: Icon(Icons.arrow_forward_ios, color: color, size: 14),
         ),
         onTap: onTap,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
     );
   }
 
-  // 3D Card Builder with proper elevation shadows
   Widget _build3DCard(String title, IconData icon, Color color, List<Widget> children) {
     return Container(
       width: double.infinity,
@@ -990,10 +799,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   gradient: LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
-                    colors: [
-                      color.withOpacity(0.1),
-                      color.withOpacity(0.2),
-                    ],
+                    colors: [color.withOpacity(0.1), color.withOpacity(0.2)],
                   ),
                   borderRadius: BorderRadius.circular(12),
                   boxShadow: [
@@ -1061,20 +867,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
               children: [
                 Text(
                   label,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey[600],
-                    fontWeight: FontWeight.w500,
-                  ),
+                  style: TextStyle(fontSize: 12, color: Colors.grey[600], fontWeight: FontWeight.w500),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   value,
-                  style: const TextStyle(
-                    fontSize: 15,
-                    color: Colors.black87,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: const TextStyle(fontSize: 15, color: Colors.black87, fontWeight: FontWeight.w600),
                 ),
               ],
             ),

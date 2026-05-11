@@ -7,6 +7,7 @@ class VirtualCaregiverWidget extends StatefulWidget {
   final VoidCallback onClose;
   final String patientName;
   final bool autoGreet;
+  final String? initialCommand;  // optional command to process immediately
 
   const VirtualCaregiverWidget({
     super.key,
@@ -14,6 +15,7 @@ class VirtualCaregiverWidget extends StatefulWidget {
     required this.onClose,
     required this.patientName,
     this.autoGreet = false,
+    this.initialCommand,
   });
 
   @override
@@ -35,6 +37,8 @@ class _VirtualCaregiverWidgetState extends State<VirtualCaregiverWidget>
   @override
   void initState() {
     super.initState();
+    widget.service.mounted = true;
+
     _animationController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1500),
@@ -47,6 +51,12 @@ class _VirtualCaregiverWidgetState extends State<VirtualCaregiverWidget>
       _autoGreet();
     } else {
       _startListening();
+      // If there is an initial command, process it after a short delay
+      if (widget.initialCommand != null && widget.initialCommand!.isNotEmpty) {
+        Future.delayed(const Duration(milliseconds: 300), () {
+          _processCommand(widget.initialCommand!);
+        });
+      }
     }
   }
 
@@ -63,6 +73,13 @@ class _VirtualCaregiverWidgetState extends State<VirtualCaregiverWidget>
       _statusText = "Listening...";
     });
     _startListening();
+
+    // After greeting, if there is an initial command, process it
+    if (widget.initialCommand != null && widget.initialCommand!.isNotEmpty) {
+      Future.delayed(const Duration(milliseconds: 800), () {
+        _processCommand(widget.initialCommand!);
+      });
+    }
   }
 
   void _startListening() {
@@ -80,11 +97,8 @@ class _VirtualCaregiverWidgetState extends State<VirtualCaregiverWidget>
           _statusText = "Processing...";
         });
         _addToHistory("user", command);
-
-        // Process command using the service's NLP
         String response = await widget.service.understandAndRespond(command);
         _addToHistory("assistant", response);
-
         setState(() {
           _isProcessing = false;
           _isSpeaking = true;
@@ -95,23 +109,47 @@ class _VirtualCaregiverWidgetState extends State<VirtualCaregiverWidget>
           _isSpeaking = false;
           _statusText = "Listening...";
         });
-        _startListening(); // continue listening for next command
-      },
-      onPartialResult: (partial) {
-        setState(() {
-          _partialText = partial;
-        });
+        _startListening();
       },
       onError: (error) {
         setState(() {
           _statusText = "Error: $error";
           _isListening = false;
         });
+        _addToHistory("system", "Error: $error");
         Future.delayed(const Duration(seconds: 2), () {
           if (mounted) _startListening();
         });
       },
+      onPartialResult: (partial) {
+        setState(() {
+          _partialText = partial;
+        });
+      },
     );
+  }
+
+  Future<void> _processCommand(String command) async {
+    // Simulate as if the user spoke it
+    setState(() {
+      _isListening = false;
+      _isProcessing = true;
+      _statusText = "Processing...";
+    });
+    _addToHistory("user", command);
+    String response = await widget.service.understandAndRespond(command);
+    _addToHistory("assistant", response);
+    setState(() {
+      _isProcessing = false;
+      _isSpeaking = true;
+      _statusText = "Speaking...";
+    });
+    await widget.service.speak(response);
+    setState(() {
+      _isSpeaking = false;
+      _statusText = "Listening...";
+    });
+    _startListening();
   }
 
   void _addToHistory(String role, String text) {
@@ -126,6 +164,7 @@ class _VirtualCaregiverWidgetState extends State<VirtualCaregiverWidget>
 
   @override
   void dispose() {
+    widget.service.mounted = false;
     widget.service.stopListening();
     _animationController.dispose();
     super.dispose();
@@ -139,9 +178,9 @@ class _VirtualCaregiverWidgetState extends State<VirtualCaregiverWidget>
     return Dialog(
       backgroundColor: Colors.transparent,
       elevation: 0,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
       child: Container(
-        width: screenWidth * 0.95,
+        width: screenWidth * 0.92,
         constraints: BoxConstraints(maxHeight: screenHeight * 0.85),
         decoration: BoxDecoration(
           gradient: LinearGradient(
@@ -188,7 +227,7 @@ class _VirtualCaregiverWidgetState extends State<VirtualCaregiverWidget>
                       children: [
                         Text(
                           widget.service.caregiverName,
-                          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
+                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
                         ),
                         Row(
                           children: [
@@ -201,7 +240,10 @@ class _VirtualCaregiverWidgetState extends State<VirtualCaregiverWidget>
                               ),
                             ),
                             const SizedBox(width: 6),
-                            Text(_statusText, style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.9))),
+                            Text(
+                              _statusText,
+                              style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.9)),
+                            ),
                           ],
                         ),
                       ],
@@ -242,11 +284,11 @@ class _VirtualCaregiverWidgetState extends State<VirtualCaregiverWidget>
                     ),
                     const SizedBox(height: 20),
                     Text(
-                      _statusText == "Listening..." ? "I'm listening..." : _statusText,
+                      _statusText,
                       style: TextStyle(fontSize: 18, color: Colors.purple[800], fontWeight: FontWeight.w600),
                     ),
-                    if (_partialText.isNotEmpty) ...[
-                      const SizedBox(height: 10),
+                    const SizedBox(height: 10),
+                    if (_partialText.isNotEmpty)
                       Container(
                         padding: const EdgeInsets.all(12),
                         margin: const EdgeInsets.symmetric(horizontal: 20),
@@ -260,7 +302,12 @@ class _VirtualCaregiverWidgetState extends State<VirtualCaregiverWidget>
                           style: TextStyle(fontSize: 14, color: Colors.purple[800], fontStyle: FontStyle.italic),
                         ),
                       ),
-                    ],
+                    const SizedBox(height: 10),
+                    Text(
+                      "I'm listening. Say something or tap a quick action.",
+                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                      textAlign: TextAlign.center,
+                    ),
                   ],
                 ),
               )
@@ -320,7 +367,7 @@ class _VirtualCaregiverWidgetState extends State<VirtualCaregiverWidget>
               ),
             ),
 
-            // Live transcription bar
+            // Live transcription bar (while listening)
             if (_isListening && _partialText.isNotEmpty)
               Container(
                 padding: const EdgeInsets.all(12),
@@ -353,26 +400,32 @@ class _VirtualCaregiverWidgetState extends State<VirtualCaregiverWidget>
                     child: Row(
                       children: [
                         _buildQuickAction(Icons.medication, "Medication", Colors.green, () {
+                          widget.service.pauseListening();
                           widget.service.speak("Opening your medications");
                           widget.service.onMedicationRequest();
                         }),
                         _buildQuickAction(Icons.notifications, "Reminders", Colors.orange, () {
+                          widget.service.pauseListening();
                           widget.service.speak("Checking your reminders");
                           widget.service.onRemindersRequest();
                         }),
                         _buildQuickAction(Icons.emergency, "Emergency", Colors.red, () {
+                          widget.service.pauseListening();
                           widget.service.speak("Opening emergency contacts");
                           widget.service.onEmergencyRequest();
                         }),
                         _buildQuickAction(Icons.menu_book, "Memory", Colors.teal, () {
+                          widget.service.pauseListening();
                           widget.service.speak("Opening your memory diary");
                           widget.service.onMemoryDiaryRequest();
                         }),
                         _buildQuickAction(Icons.extension, "Games", Colors.purple, () {
+                          widget.service.pauseListening();
                           widget.service.speak("Let's play some games");
                           widget.service.onGamesRequest();
                         }),
                         _buildQuickAction(Icons.emoji_emotions, "Mood", Colors.amber, () {
+                          widget.service.pauseListening();
                           widget.service.speak("How are you feeling today?");
                           widget.service.onMoodCheckRequest();
                         }),

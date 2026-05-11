@@ -7,12 +7,11 @@ class WakeWordService {
   final SpeechToText _speech = SpeechToText();
   bool _listening = false;
   bool _shouldListen = false;
-  final String _wakeWord = "memo";
-  VoidCallback? _onWakeWordDetected;
+  final List<String> _wakeWords = ["memo", "emergency"];  // Accepts both
+  Function(String)? _onWakeWordDetected;
   Timer? _restartTimer;
   Function(String)? onDebug;
 
-  // Add this getter to fix the errors
   bool get isActive => _listening;
 
   Future<bool> initialize({Function(String)? onDebugLog}) async {
@@ -38,7 +37,7 @@ class WakeWordService {
     return status.isGranted;
   }
 
-  void startListening(VoidCallback onDetected) {
+  void startListening(Function(String) onDetected) {
     _log("startListening called");
     _onWakeWordDetected = onDetected;
     _shouldListen = true;
@@ -56,19 +55,22 @@ class WakeWordService {
     if (!_shouldListen) return;
     if (_speech.isListening) return;
 
-    _log("Listening for '$_wakeWord'...");
+    _log("Listening for ${_wakeWords.join(' or ')}...");
     _speech.listen(
       onResult: (result) {
         if (!_shouldListen) return;
         String text = result.recognizedWords.toLowerCase();
         _log("Heard: '$text'");
-        if (text.contains(_wakeWord)) {
-          _log("✅ WAKE WORD DETECTED!");
-          _onWakeWordDetected?.call();
-          _stop();
-          Future.delayed(const Duration(seconds: 2), () {
-            if (_shouldListen && !_listening) _start();
-          });
+        for (String word in _wakeWords) {
+          if (text.contains(word)) {
+            _log("✅ WAKE WORD DETECTED: '$word'");
+            _onWakeWordDetected?.call(text);
+            _stop();
+            Future.delayed(const Duration(seconds: 2), () {
+              if (_shouldListen && !_listening) _start();
+            });
+            break;
+          }
         }
       },
       listenFor: const Duration(seconds: 10),

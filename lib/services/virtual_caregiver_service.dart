@@ -6,6 +6,9 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:intl/intl.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 enum CaregiverMood {
   cheerful,
@@ -16,23 +19,14 @@ enum CaregiverMood {
 }
 
 class VirtualCaregiverService {
-  // Speech recognition
   late SpeechToText _speech;
   bool _isListening = false;
   bool _isListeningContinuous = false;
-
-  // Text to speech
   late FlutterTts _tts;
   bool _isSpeaking = false;
-
-  // Storage
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
-
-  // Caregiver personality
   String _caregiverName = "Ella";
   CaregiverMood _currentMood = CaregiverMood.cheerful;
-
-  // Conversation context
   String _lastUserInput = "";
   DateTime _lastInteraction = DateTime.now();
   int _interactionCount = 0;
@@ -41,7 +35,6 @@ class VirtualCaregiverService {
   List<Map<String, dynamic>> _reminders = [];
   List<Map<String, dynamic>> _emergencyContacts = [];
 
-  // Callbacks
   final Function() onRemindersRequest;
   final Function() onEmergencyRequest;
   final Function() onMedicationRequest;
@@ -51,8 +44,8 @@ class VirtualCaregiverService {
   final Function(String) onCallContactRequest;
   final Function(String) onSendMessageRequest;
   final Function() onMoodCheckRequest;
+  final Function()? onEmergencyAlertSent;
 
-  // Continuous listening callbacks
   Function(String)? _onPartialResultCallback;
   Function(String)? _onFinalResultCallback;
   Function(String)? _onErrorCallback;
@@ -68,9 +61,9 @@ class VirtualCaregiverService {
     required this.onCallContactRequest,
     required this.onSendMessageRequest,
     required this.onMoodCheckRequest,
+    this.onEmergencyAlertSent,
   });
 
-  // Initialize services
   Future<bool> initialize() async {
     try {
       _speech = SpeechToText();
@@ -78,13 +71,11 @@ class VirtualCaregiverService {
         onError: (error) => print('Speech error: $error'),
         onStatus: (status) => print('Speech status: $status'),
       );
-
       _tts = FlutterTts();
       await _tts.setLanguage("en-US");
       await _tts.setPitch(1.1);
       await _tts.setSpeechRate(0.5);
       await _tts.setVolume(1.0);
-
       var voices = await _tts.getVoices;
       if (voices.isNotEmpty) {
         var femaleVoice = voices.firstWhere(
@@ -93,12 +84,10 @@ class VirtualCaregiverService {
         );
         await _tts.setVoice({"name": femaleVoice, "locale": "en-US"});
       }
-
       _tts.setCompletionHandler(() {
         _isSpeaking = false;
         if (_isListeningContinuous) _startContinuousListening();
       });
-
       await _loadPatientData();
       return speechAvailable;
     } catch (e) {
@@ -107,7 +96,6 @@ class VirtualCaregiverService {
     }
   }
 
-  // Load patient data from secure storage
   Future<void> _loadPatientData() async {
     try {
       _patientData['name'] = await _storage.read(key: 'patient_name') ?? 'Friend';
@@ -127,32 +115,32 @@ class VirtualCaregiverService {
         final name = await _storage.read(key: 'emergency_contact_${i}_name');
         final phone = await _storage.read(key: 'emergency_contact_${i}_phone');
         final relation = await _storage.read(key: 'emergency_contact_${i}_relation');
-        if (name != null && phone != null) {
-          _emergencyContacts.add({'name': name, 'phone': phone, 'relation': relation});
+        if (name != null && phone != null && name.isNotEmpty && phone.isNotEmpty) {
+          _emergencyContacts.add({'name': name, 'phone': phone, 'relation': relation ?? ''});
+          print("✅ Loaded emergency contact ${i+1}: $name, $phone");
         }
       }
 
       final caretakerName = await _storage.read(key: 'caretaker_name');
       final caretakerPhone = await _storage.read(key: 'caretaker_phone');
-      if (caretakerName != null && caretakerPhone != null) {
+      if (caretakerName != null && caretakerPhone != null && caretakerName.isNotEmpty && caretakerPhone.isNotEmpty) {
         _patientData['caretaker'] = {
           'name': caretakerName,
           'phone': caretakerPhone,
           'relation': await _storage.read(key: 'caretaker_relation'),
         };
+        print("✅ Loaded caregiver: $caretakerName, $caretakerPhone");
       }
     } catch (e) {
       print('Error loading patient data: $e');
     }
   }
 
-  // Request microphone permission
   Future<bool> requestPermissions() async {
     final status = await Permission.microphone.request();
     return status.isGranted;
   }
 
-  // Continuous listening (keeps mic open)
   void startContinuousListening({
     required Function(String) onResult,
     required Function(String) onError,
@@ -168,7 +156,6 @@ class VirtualCaregiverService {
   void _startContinuousListening() {
     if (_isListening || _isSpeaking || !_isListeningContinuous) return;
     _isListening = true;
-
     _speech.listen(
       onResult: (result) {
         String text = result.recognizedWords;
@@ -211,7 +198,6 @@ class VirtualCaregiverService {
     if (_isListeningContinuous && !_isSpeaking) _startContinuousListening();
   }
 
-  // Speak response
   Future<void> speak(String text, {CaregiverMood? mood}) async {
     try {
       pauseListening();
@@ -225,77 +211,184 @@ class VirtualCaregiverService {
     }
   }
 
-  // Main entry point for understanding any user input
+  // ============================================================
+  // EMERGENCY ALERT – CORRECTED (fixes Position? error)
+  // ============================================================
+  Future<void> sendEmergencyAlert() async {
+    print(">>> sendEmergencyAlert CALLED <<<");
+
+    // Reload patient data
+    await _loadPatientData();
+
+    // 1. Check location services
+    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      await speak("Location services are disabled. Please enable GPS in settings.");
+      return;
+    }
+
+    // 2. Check location permission
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) {
+        await speak("Location permission denied. Cannot send emergency alert.");
+        return;
+      }
+    }
+    if (permission == LocationPermission.deniedForever) {
+      await speak("Location permission permanently denied. Please enable in settings.");
+      return;
+    }
+
+    // 3. Get current location with timeout and fallback
+    Position position;
+    try {
+      position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.medium,
+        timeLimit: const Duration(seconds: 15),
+      ).timeout(const Duration(seconds: 20));
+    } catch (e) {
+      print("Location error: $e");
+      // Try last known location as fallback
+      try {
+        Position? lastPosition = await Geolocator.getLastKnownPosition();
+        if (lastPosition == null) throw Exception("No last known location");
+        position = lastPosition;
+        print("Using last known location: ${position.latitude}, ${position.longitude}");
+      } catch (e2) {
+        await speak("Unable to get your current location. Please check GPS settings.");
+        return;
+      }
+    }
+
+    // 4. Build emergency message
+    String locationLink = "https://maps.google.com/?q=${position.latitude},${position.longitude}";
+    String emergencyMessage = "🚨 EMERGENCY ALERT 🚨\n\nI need help.\nMy current location:\n$locationLink\n\nPlease reach out immediately.\n\n- Sent from MemoCare";
+
+    // 5. Collect recipients
+    List<String> recipients = [];
+    if (_patientData.containsKey('caretaker') && _patientData['caretaker']['phone'] != null) {
+      String phone = _patientData['caretaker']['phone'].toString();
+      if (phone.isNotEmpty) recipients.add(phone);
+    }
+    if (_emergencyContacts.isNotEmpty && _emergencyContacts.first['phone'] != null) {
+      String phone = _emergencyContacts.first['phone'].toString();
+      if (phone.isNotEmpty) recipients.add(phone);
+    }
+    recipients = recipients.toSet().toList();
+    print("Final recipients: $recipients");
+
+    if (recipients.isEmpty) {
+      await speak("No emergency contacts found. Please set up contacts first.");
+      return;
+    }
+
+    // 6. Send SMS via compose screen
+    bool smsSent = false;
+    for (String phone in recipients) {
+      String cleanPhone = phone.replaceAll(RegExp(r'[^0-9]'), '');
+      if (cleanPhone.isEmpty) continue;
+      final smsUri = Uri(scheme: 'sms', path: cleanPhone, queryParameters: {'body': emergencyMessage});
+      if (await canLaunchUrl(smsUri)) {
+        await launchUrl(smsUri);
+        smsSent = true;
+        print("SMS launched for $cleanPhone");
+        break;
+      } else {
+        print("Could not launch SMS for $cleanPhone");
+      }
+    }
+
+    // 7. WhatsApp fallback
+    bool whatsappSent = false;
+    if (!smsSent && recipients.isNotEmpty) {
+      String cleanPhone = recipients.first.replaceAll(RegExp(r'[^0-9]'), '');
+      String whatsappUrl = "https://api.whatsapp.com/send?phone=$cleanPhone&text=${Uri.encodeComponent(emergencyMessage)}";
+      if (await canLaunchUrl(Uri.parse(whatsappUrl))) {
+        await launchUrl(Uri.parse(whatsappUrl));
+        whatsappSent = true;
+        print("WhatsApp launched");
+      }
+    }
+
+    // 8. In-app notification
+    FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
+    const AndroidInitializationSettings androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const DarwinInitializationSettings iosSettings = DarwinInitializationSettings();
+    const InitializationSettings initSettings = InitializationSettings(android: androidSettings, iOS: iosSettings);
+    await flutterLocalNotificationsPlugin.initialize(initSettings);
+    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+      'emergency_channel',
+      'Emergency Alerts',
+      channelDescription: 'Notifications for emergency alerts',
+      importance: Importance.high,
+      priority: Priority.high,
+    );
+    const NotificationDetails notificationDetails = NotificationDetails(android: androidDetails);
+    await flutterLocalNotificationsPlugin.show(
+      0,
+      '🚨 Emergency Alert Sent',
+      'Your emergency contacts have been notified with your location.',
+      notificationDetails,
+    );
+
+    // 9. Speak confirmation
+    String confirmation = smsSent || whatsappSent
+        ? "Emergency alert sent. Your contacts have been notified with your location."
+        : "I'm sorry, I couldn't send the emergency alert. Please check your permissions.";
+    await speak(confirmation, mood: CaregiverMood.concerned);
+
+    onEmergencyAlertSent?.call();
+  }
+
+  // ============================================================
+  // Rest of the methods (unchanged)
+  // ============================================================
   Future<String> understandAndRespond(String userInput) async {
     return await processCommand(userInput);
   }
 
-  // Natural language processing – handles any free‑form input
   Future<String> processCommand(String input) async {
     String cmd = input.toLowerCase().trim();
-
-    // Greeting
     if (_isGreeting(cmd)) return _getGreetingResponse();
     if (_isGratitude(cmd)) return _getGratitudeResponse();
     if (_isFarewell(cmd)) return _getFarewellResponse();
-
-    // Medication
     if (_isMedicationRelated(cmd)) {
       onMedicationRequest();
       return _getMedicationResponse(cmd);
     }
-
-    // Reminders
     if (_isReminderRelated(cmd)) {
       onRemindersRequest();
       return _getReminderResponse(cmd);
     }
-
-    // Emergency
     if (_isEmergencyRelated(cmd)) {
       onEmergencyRequest();
       return _getEmergencyResponse();
     }
-
-    // Memory diary
     if (_isMemoryDiaryRelated(cmd)) {
       onMemoryDiaryRequest();
       return _getMemoryDiaryResponse();
     }
-
-    // Games
     if (_isGamesRelated(cmd)) {
       onGamesRequest();
       return _getGamesResponse();
     }
-
-    // Mood
     if (_isMoodRelated(cmd)) {
       onMoodCheckRequest();
       return _getMoodResponse(cmd);
     }
-
-    // Call contact
     String? contact = _extractContactName(cmd);
     if (contact != null) {
       onCallContactRequest(contact);
       return _getCallResponse(contact);
     }
-
-    // Time / date
     if (_isTimeRelated(cmd)) return _getTimeResponse();
-
-    // Personal questions
     if (_isPersonalQuestion(cmd)) return _getPersonalResponse(cmd);
-
-    // Help
     if (_isHelpRequest(cmd)) return _getHelpResponse();
-
-    // Default
     return _getDefaultResponse(cmd);
   }
 
-  // Pattern matching helpers
   bool _isGreeting(String s) => ['hello','hi','hey','good morning','good afternoon','good evening','howdy','namaste'].any((g) => s.contains(g));
   bool _isGratitude(String s) => ['thank','thanks','appreciate','grateful'].any((g) => s.contains(g));
   bool _isFarewell(String s) => ['bye','goodbye','see you','take care','later'].any((f) => s.contains(f));
@@ -322,7 +415,6 @@ class VirtualCaregiverService {
     return null;
   }
 
-  // Response generators
   String _getGreetingResponse() {
     int hour = DateTime.now().hour;
     String timeGreeting = hour < 12 ? "Good morning" : (hour < 17 ? "Good afternoon" : "Good evening");
@@ -406,7 +498,6 @@ class VirtualCaregiverService {
     return responses[_interactionCount % responses.length];
   }
 
-  // Time‑based greeting for auto‑open
   String getTimeBasedGreeting(String patientName) {
     int hour = DateTime.now().hour;
     if (hour < 12) return "Good morning $patientName! I hope you had a good night's rest. How can I help you?";

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'screens/welcome_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/signup_screen.dart';
@@ -308,7 +309,14 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
   bool _isCaregiverActive = false;
   Timer? _healthCheckTimer;
 
-  late final List<Widget> _screens;
+  late final List<Widget> _screens = [
+    const DashboardScreen(),
+    ActivityCenterScreen(onVoiceAssistantPressed: _showVoiceAssistantDialog),
+    RemindersScreen(),
+    MedicationScreen(onVoiceAssistantPressed: _showVoiceAssistantDialog),
+    const EmergencyScreen(),
+    const ActivityScreen(),
+  ];
 
   @override
   void initState() {
@@ -318,17 +326,9 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
     _initVoiceAssistant();
     _initVirtualCaregiver();
     _initWakeWordService();
+    _requestEmergencyPermissions();
     _checkPendingReminders();
     _scheduler.startScheduler();
-
-    _screens = [
-      const DashboardScreen(),
-      ActivityCenterScreen(onVoiceAssistantPressed: _showVoiceAssistantDialog),
-      RemindersScreen(),
-      MedicationScreen(onVoiceAssistantPressed: _showVoiceAssistantDialog),
-      const EmergencyScreen(),
-      const ActivityScreen(),
-    ];
   }
 
   @override
@@ -346,6 +346,12 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
     const storage = FlutterSecureStorage();
     final name = await storage.read(key: StorageKeys.patientName);
     setState(() => _patientName = name ?? 'Friend');
+  }
+
+  Future<void> _requestEmergencyPermissions() async {
+    await Permission.location.request();
+    await Permission.locationAlways.request();
+    await Permission.sms.request();
   }
 
   Future<void> _initVoiceAssistant() async {
@@ -375,6 +381,13 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
       onCallContactRequest: _handleCallContact,
       onSendMessageRequest: _handleSendMessage,
       onMoodCheckRequest: _showMoodCheck,
+      onEmergencyAlertSent: () {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Emergency alert sent"), backgroundColor: Colors.red, duration: Duration(seconds: 2)),
+          );
+        }
+      },
     );
     await _caregiverService.initialize();
     await _caregiverService.requestPermissions();
@@ -382,38 +395,36 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
 
   Future<void> _initWakeWordService() async {
     _wakeWordService = WakeWordService();
-    bool available = await _wakeWordService.initialize(onDebugLog: (msg) => print(msg));
-    if (!available) {
-      print("❌ Wake word service not available");
-      return;
-    }
+    bool available = await _wakeWordService.initialize();
+    if (!available) return;
     bool hasPermission = await _wakeWordService.requestPermissions();
     if (!hasPermission) {
-      print("❌ Microphone permission denied");
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Microphone permission needed for voice commands"),
-          backgroundColor: Colors.orange,
-        ),
+        const SnackBar(content: Text("Microphone permission needed")),
       );
       return;
     }
-
     _wakeWordService.startListening(_onWakeWordTriggered);
-    print("✅ Wake word service initialized");
-
     _healthCheckTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
       if (!_wakeWordService.isActive && !_isCaregiverActive && mounted) {
-        print("Wake word not active – restarting...");
         _wakeWordService.startListening(_onWakeWordTriggered);
       }
     });
   }
 
-  void _onWakeWordTriggered() {
-    print(">>> WAKE WORD 'memo' DETECTED <<<");
-    if (!_isCaregiverActive && mounted) {
-      _showVirtualCaregiverManually();
+  void _onWakeWordTriggered(String command) {
+    print(">>> WAKE WORD DETECTED: $command");
+    if (command.contains("emergency") ||
+        command.contains("help me") ||
+        command.contains("danger") ||
+        command.contains("sos") ||
+        command.contains("need help")) {
+      print(">>> CALLING sendEmergencyAlert");
+      _caregiverService.sendEmergencyAlert();
+    }
+    else if (!_isCaregiverActive && mounted)
+    {
+      _showVirtualCaregiverManually(command);
     }
   }
 
@@ -425,12 +436,7 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
   void _showSettingsFromVoice() {
     _voiceService.speak("Opening settings from menu");
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Open settings from the menu drawer'),
-        duration: Duration(seconds: 2),
-        backgroundColor: Colors.blue,
-        behavior: SnackBarBehavior.floating,
-      ),
+      const SnackBar(content: Text('Open settings from menu drawer')),
     );
   }
 
@@ -440,20 +446,14 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
   }
 
   void _handleSendMessage(String message) {
-    print("Send message: $message");
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Message sent: $message'),
-        backgroundColor: Colors.green,
-        behavior: SnackBarBehavior.floating,
-      ),
+      SnackBar(content: Text('Message sent: $message'), backgroundColor: Colors.green),
     );
   }
 
   void _handleCustomCommand(String command) {
     if (command.contains('help')) {
-      _voiceService.speak(
-          "You can say: open reminders, call emergency, show medications, open memory diary, play games, go to dashboard, or open settings");
+      _voiceService.speak("You can say: open reminders, call emergency, show medications, open memory diary, play games, go to dashboard, or open settings");
     } else if (command.contains('game') || command.contains('play')) {
       _navigateToScreen(1);
     } else if (command.contains('diary') || command.contains('memory diary')) {
@@ -467,7 +467,7 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text("How are you feeling?", style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text("How are you feeling?"),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -489,16 +489,11 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
         decoration: BoxDecoration(color: color.withOpacity(0.1), shape: BoxShape.circle),
         child: Icon(icon, color: color),
       ),
-      title: Text(mood, style: const TextStyle(fontWeight: FontWeight.w600)),
+      title: Text(mood),
       onTap: () {
         Navigator.pop(context);
-        _caregiverService.speak(
-          "I hope you feel better soon. Would you like to do something to improve your mood?",
-          mood: CaregiverMood.encouraging,
-        );
-        if (mood == "Sad" || mood == "Anxious") {
-          _showSoothingActivitySuggestion();
-        }
+        _caregiverService.speak("I hope you feel better soon. Would you like to do something to improve your mood?");
+        if (mood == "Sad" || mood == "Anxious") _showSoothingActivitySuggestion();
       },
     );
   }
@@ -508,21 +503,11 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text("Feeling better?"),
-        content: const Text(
-          "Would you like to try a calming activity?\n\n"
-              "• Play a relaxing memory game\n"
-              "• Add to your memory diary\n"
-              "• Listen to soothing music\n"
-              "• Take a gentle walk reminder",
-        ),
+        content: const Text("Would you like to play a relaxing memory game or write in your diary?"),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text("Maybe later")),
           ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _navigateToScreen(1);
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.purple, foregroundColor: Colors.white),
+            onPressed: () { Navigator.pop(context); _navigateToScreen(1); },
             child: const Text("Play a game"),
           ),
         ],
@@ -533,51 +518,34 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
   Future<void> _checkPendingReminders() async {
     const storage = FlutterSecureStorage();
     final remindersData = await storage.read(key: StorageKeys.patientReminders);
-    if (remindersData != null) {
-      setState(() => _showBadge = true);
-    }
+    if (remindersData != null) setState(() => _showBadge = true);
   }
 
-  Widget _buildBadge() {
-    if (!_showBadge) return const SizedBox.shrink();
-    return Container(
-      width: 10,
-      height: 10,
-      decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
-    );
-  }
+  Widget _buildBadge() => _showBadge
+      ? Container(width: 10, height: 10, decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle))
+      : const SizedBox.shrink();
 
   List<BottomNavigationBarItem> get _navItems => [
-    const BottomNavigationBarItem(icon: Icon(Icons.dashboard), activeIcon: Icon(Icons.dashboard), label: 'Dashboard'),
-    const BottomNavigationBarItem(icon: Icon(Icons.extension), activeIcon: Icon(Icons.extension), label: 'Games'),
+    const BottomNavigationBarItem(icon: Icon(Icons.dashboard), label: 'Dashboard'),
+    const BottomNavigationBarItem(icon: Icon(Icons.extension), label: 'Games'),
     BottomNavigationBarItem(
       icon: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          const Icon(Icons.notifications),
-          Positioned(right: -4, top: -4, child: _buildBadge()),
-        ],
-      ),
-      activeIcon: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          const Icon(Icons.notifications),
-          Positioned(right: -2, top: -2, child: _buildBadge()),
-        ],
+        children: [const Icon(Icons.notifications), Positioned(right: -4, top: -4, child: _buildBadge())],
       ),
       label: 'Reminders',
     ),
-    const BottomNavigationBarItem(icon: Icon(Icons.medication), activeIcon: Icon(Icons.medication), label: 'Medication'),
-    const BottomNavigationBarItem(icon: Icon(Icons.emergency), activeIcon: Icon(Icons.emergency), label: 'Emergency'),
-    const BottomNavigationBarItem(icon: Icon(Icons.menu_book), activeIcon: Icon(Icons.menu_book), label: 'Memory'),
+    const BottomNavigationBarItem(icon: Icon(Icons.medication), label: 'Medication'),
+    const BottomNavigationBarItem(icon: Icon(Icons.emergency), label: 'Emergency'),
+    const BottomNavigationBarItem(icon: Icon(Icons.menu_book), label: 'Memory'),
   ];
 
   void _onItemTapped(int index) {
-    setState(() {
-      _selectedIndex = index;
-      if (index == 2) _showBadge = false;
-    });
-    _pageController.animateToPage(index, duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
+    setState(() { _selectedIndex = index; if (index == 2) _showBadge = false; });
+    _pageController.animateToPage(
+      index,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,  // ✅ curve is now provided
+    );
   }
 
   void _showVoiceAssistantDialog() {
@@ -595,7 +563,7 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
     );
   }
 
-  void _showVirtualCaregiverManually() {
+  void _showVirtualCaregiverManually([String? initialCommand]) {
     if (_isCaregiverActive) return;
     setState(() => _isCaregiverActive = true);
     _wakeWordService.stopListening();
@@ -607,9 +575,7 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
         onWillPop: () async {
           setState(() => _isCaregiverActive = false);
           Future.delayed(const Duration(milliseconds: 500), () {
-            if (mounted && !_wakeWordService.isActive) {
-              _wakeWordService.startListening(_onWakeWordTriggered);
-            }
+            if (mounted && !_wakeWordService.isActive) _wakeWordService.startListening(_onWakeWordTriggered);
           });
           return true;
         },
@@ -619,13 +585,12 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
             setState(() => _isCaregiverActive = false);
             Navigator.pop(context);
             Future.delayed(const Duration(milliseconds: 500), () {
-              if (mounted && !_wakeWordService.isActive) {
-                _wakeWordService.startListening(_onWakeWordTriggered);
-              }
+              if (mounted && !_wakeWordService.isActive) _wakeWordService.startListening(_onWakeWordTriggered);
             });
           },
           patientName: _patientName,
           autoGreet: true,
+          initialCommand: initialCommand,  // ✅ now the widget accepts this
         ),
       ),
     );
@@ -644,24 +609,33 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
         },
         children: _screens,
       ),
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, -2))],
-        ),
-        child: BottomNavigationBar(
-          type: BottomNavigationBarType.fixed,
-          currentIndex: _selectedIndex,
-          onTap: _onItemTapped,
-          selectedItemColor: Colors.blue[600],
-          unselectedItemColor: Colors.grey[600],
-          selectedFontSize: 11,
-          unselectedFontSize: 11,
-          elevation: 0,
-          backgroundColor: Colors.white,
-          items: _navItems,
-          iconSize: 22,
-        ),
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _selectedIndex,
+        onTap: _onItemTapped,
+        items: _navItems,
+        type: BottomNavigationBarType.fixed,
       ),
+      floatingActionButton: Column(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          FloatingActionButton(
+            heroTag: "caregiver",
+            backgroundColor: _isCaregiverActive ? Colors.green : Colors.purple,
+            onPressed: () => _showVirtualCaregiverManually(),
+            child: Icon(_isCaregiverActive ? Icons.chat : Icons.support_agent),
+            mini: true,
+          ),
+          const SizedBox(height: 10),
+          FloatingActionButton(
+            heroTag: "assistant",
+            backgroundColor: _showVoiceAssistant ? Colors.green : Colors.blue[600],
+            onPressed: _showVoiceAssistantDialog,
+            child: Icon(_showVoiceAssistant ? Icons.voice_chat : Icons.mic),
+            mini: true,
+          ),
+        ],
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
     );
   }
 
