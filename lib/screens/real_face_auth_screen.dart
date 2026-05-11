@@ -1,11 +1,11 @@
-import 'dart:async'; // for Timer
+import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
-import 'package:google_ml_kit/google_ml_kit.dart';
+import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:path_provider/path_provider.dart';
 import '../constants/storage_keys.dart';
 
 class RealFaceAuthScreen extends StatefulWidget {
@@ -17,17 +17,16 @@ class RealFaceAuthScreen extends StatefulWidget {
 
 class _RealFaceAuthScreenState extends State<RealFaceAuthScreen> {
   CameraController? _cameraController;
-  final FaceDetector _faceDetector = GoogleMlKit.vision.faceDetector(
-    FaceDetectorOptions(
+  final FaceDetector _faceDetector = FaceDetector(
+    options: FaceDetectorOptions(
       enableContours: true,
       enableLandmarks: true,
       enableClassification: true,
     ),
   );
-  bool _isProcessing = false;
+  bool _isDetecting = false;
   bool _isAuthenticated = false;
   String _status = "Initializing camera...";
-  Timer? _captureTimer;
 
   @override
   void initState() {
@@ -55,27 +54,31 @@ class _RealFaceAuthScreenState extends State<RealFaceAuthScreen> {
 
     _cameraController = CameraController(
       frontCamera,
-      ResolutionPreset.medium,
+      ResolutionPreset.low,
       enableAudio: false,
     );
 
     try {
       await _cameraController!.initialize();
+
       if (!mounted) return;
+
       setState(() {
         _status = "Scanning face...";
       });
-      _startPeriodicCapture();
+
+      _startPeriodicDetection();
+
     } catch (e) {
       setState(() => _status = "Camera error: $e");
     }
   }
 
-  void _startPeriodicCapture() {
-    // Capture a picture every second and process it
-    _captureTimer = Timer.periodic(const Duration(seconds: 1), (timer) async {
-      if (_isProcessing || _isAuthenticated || _cameraController == null) return;
-      _isProcessing = true;
+  void _startPeriodicDetection() {
+    Timer.periodic(const Duration(seconds: 1), (timer) async {
+      if (_isDetecting || _isAuthenticated || _cameraController == null || !_cameraController!.value.isInitialized) return;
+
+      _isDetecting = true;
       try {
         // Take a picture
         final XFile picture = await _cameraController!.takePicture();
@@ -86,19 +89,33 @@ class _RealFaceAuthScreenState extends State<RealFaceAuthScreen> {
         final faces = await _faceDetector.processImage(inputImage);
 
         // Delete temp file
-        imageFile.delete();
+        await imageFile.delete();
 
         if (faces.isNotEmpty && !_isAuthenticated) {
           _isAuthenticated = true;
-          _captureTimer?.cancel();
-          await _onFaceDetected();
+          timer.cancel();
+          await _stopCamera();
+          if (mounted) {
+            await _onFaceDetected();
+          }
         }
       } catch (e) {
         print("Face detection error: $e");
       } finally {
-        _isProcessing = false;
+        _isDetecting = false;
       }
     });
+  }
+
+  Future<void> _stopCamera() async {
+    try {
+      if (_cameraController != null) {
+        await _cameraController!.dispose();
+        _cameraController = null;
+      }
+    } catch (e) {
+      print("Error stopping camera: $e");
+    }
   }
 
   Future<void> _onFaceDetected() async {
@@ -121,8 +138,7 @@ class _RealFaceAuthScreenState extends State<RealFaceAuthScreen> {
 
   @override
   void dispose() {
-    _captureTimer?.cancel();
-    _cameraController?.dispose();
+    _stopCamera();
     _faceDetector.close();
     super.dispose();
   }
@@ -132,38 +148,91 @@ class _RealFaceAuthScreenState extends State<RealFaceAuthScreen> {
     return Scaffold(
       body: Stack(
         children: [
+          // Full screen camera preview
           if (_cameraController != null && _cameraController!.value.isInitialized)
-            CameraPreview(_cameraController!)
+            Positioned.fill(
+              child: CameraPreview(_cameraController!),
+            )
           else
             Container(color: Colors.black),
-          Container(
-            color: Colors.black.withOpacity(0.3),
-            child: Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(
-                    Icons.face,
-                    size: 80,
-                    color: Colors.white,
-                  ),
-                  const SizedBox(height: 20),
-                  Text(
-                    _status,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w500,
+
+          // Overlay
+          Positioned.fill(
+            child: Container(
+              color: Colors.black.withOpacity(0.3),
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    // Face outline guide
+                    Container(
+                      width: 200,
+                      height: 200,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: Colors.white,
+                          width: 3,
+                        ),
+                      ),
+                      child: const Icon(
+                        Icons.face,
+                        size: 100,
+                        color: Colors.white,
+                      ),
                     ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 30),
-                  if (_status.contains("denied") || _status.contains("error"))
-                    ElevatedButton(
-                      onPressed: _initCamera,
-                      child: const Text("Retry"),
+
+                    const SizedBox(height: 40),
+
+                    // Status text
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.5),
+                        borderRadius: BorderRadius.circular(30),
+                      ),
+                      child: Text(
+                        _status,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
                     ),
-                ],
+
+                    const SizedBox(height: 20),
+
+                    // Hint text
+                    if (_status == "Scanning face...")
+                      const Text(
+                        'Position your face in the circle',
+                        style: TextStyle(
+                          color: Colors.white70,
+                          fontSize: 14,
+                        ),
+                      ),
+
+                    // Retry button for errors
+                    if (_status.contains("denied") || _status.contains("error") || _status.contains("No camera"))
+                      Padding(
+                        padding: const EdgeInsets.only(top: 20),
+                        child: ElevatedButton(
+                          onPressed: _initCamera,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.blue,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(30),
+                            ),
+                          ),
+                          child: const Text("Retry"),
+                        ),
+                      ),
+                  ],
+                ),
               ),
             ),
           ),

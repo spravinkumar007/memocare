@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'screens/welcome_screen.dart';
@@ -15,16 +16,17 @@ import 'constants/storage_keys.dart';
 import 'services/notification_service.dart';
 import 'services/reminder_scheduler.dart';
 import 'services/voice_assistant_service.dart';
+import 'services/virtual_caregiver_service.dart';
+import 'services/wake_word_service.dart';
 import 'widgets/voice_assistant_widget.dart';
+import 'widgets/virtual_caregiver_widget.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize notification service
   final notificationService = NotificationService();
   await notificationService.init();
 
-  // Start reminder scheduler
   final scheduler = ReminderScheduler();
   scheduler.startScheduler();
 
@@ -42,29 +44,20 @@ class MyApp extends StatelessWidget {
         primarySwatch: Colors.blue,
         useMaterial3: true,
         fontFamily: 'Roboto',
-
-        // Set scaffold background color to white
         scaffoldBackgroundColor: Colors.white,
-
-        // Set card color to white
         cardColor: Colors.white,
-
         appBarTheme: AppBarTheme(
           elevation: 0,
           centerTitle: true,
           backgroundColor: Colors.blue[600],
           foregroundColor: Colors.white,
         ),
-
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: ElevatedButton.styleFrom(
             elevation: 2,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
         ),
-
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
           fillColor: Colors.grey[50],
@@ -77,8 +70,6 @@ class MyApp extends StatelessWidget {
             borderSide: BorderSide(color: Colors.blue[600]!),
           ),
         ),
-
-        // Text themes with proper colors
         textTheme: const TextTheme(
           bodyLarge: TextStyle(color: Colors.black87),
           bodyMedium: TextStyle(color: Colors.black87),
@@ -86,7 +77,6 @@ class MyApp extends StatelessWidget {
           titleMedium: TextStyle(color: Colors.black87),
         ),
       ),
-
       darkTheme: ThemeData.dark().copyWith(
         primaryColor: Colors.blue[700],
         appBarTheme: AppBarTheme(
@@ -108,10 +98,8 @@ class MyApp extends StatelessWidget {
           ),
         ),
       ),
-
       themeMode: ThemeMode.system,
       home: const SplashScreen(),
-
       routes: {
         '/welcome': (context) => const WelcomeScreen(),
         '/login': (context) => const LoginScreen(),
@@ -119,13 +107,10 @@ class MyApp extends StatelessWidget {
         '/real-face-auth': (context) => const RealFaceAuthScreen(),
         '/dashboard': (context) => const MainApp(),
         '/emergency': (context) => const EmergencyScreen(),
-        '/activity-center': (context) => ActivityCenterScreen(
-          onVoiceAssistantPressed: () {}, // This will be overridden in MainApp
-        ),
+        '/activity-center': (context) => ActivityCenterScreen(onVoiceAssistantPressed: () {}),
         '/medications': (context) => const MedicationScreen(),
         '/settings': (context) => const SettingsScreen(),
       },
-
       debugShowCheckedModeBanner: false,
     );
   }
@@ -143,7 +128,6 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
   late Animation<double> _scaleAnimation;
   late Animation<double> _fadeAnimation;
   late AnimationController _loadingAnimationController;
-
   String _statusMessage = 'Welcome to MemoCare...';
   final ReminderScheduler _scheduler = ReminderScheduler();
 
@@ -160,53 +144,34 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
       duration: const Duration(seconds: 2),
       vsync: this,
     );
-
     _loadingAnimationController = AnimationController(
       duration: const Duration(milliseconds: 1500),
       vsync: this,
     )..repeat();
-
-    _scaleAnimation = Tween<double>(
-      begin: 0.5,
-      end: 1.0,
-    ).animate(CurvedAnimation(
-      parent: _animationController,
-      curve: Curves.elasticOut,
-    ));
-
-    _fadeAnimation = Tween<double>(
-      begin: 0.0,
-      end: 1.0,
-    ).animate(CurvedAnimation(
-      parent: _animationController,
-      curve: Curves.easeIn,
-    ));
-
+    _scaleAnimation = Tween<double>(begin: 0.5, end: 1.0).animate(
+      CurvedAnimation(parent: _animationController, curve: Curves.elasticOut),
+    );
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _animationController, curve: Curves.easeIn),
+    );
     _animationController.forward();
   }
 
   Future<void> _initializeServices() async {
-    // Update status messages during initialization
     await Future.delayed(const Duration(milliseconds: 500));
     if (mounted) setState(() => _statusMessage = 'Loading notifications...');
-
     await Future.delayed(const Duration(milliseconds: 500));
     if (mounted) setState(() => _statusMessage = 'Checking reminders...');
-
-    // Reschedule any pending reminders
     await _scheduler.rescheduleAllReminders();
-
     await Future.delayed(const Duration(milliseconds: 500));
     if (mounted) setState(() => _statusMessage = 'Almost ready...');
   }
 
   Future<void> _checkAuthAndNavigate() async {
     await Future.delayed(const Duration(milliseconds: 3000));
-
     const storage = FlutterSecureStorage();
     final isLoggedIn = await storage.read(key: StorageKeys.userLoggedIn) == 'true';
     final faceRegistered = await storage.read(key: StorageKeys.faceRegistered) == 'true';
-
     if (mounted) {
       if (isLoggedIn && faceRegistered) {
         Navigator.of(context).pushReplacementNamed('/real-face-auth');
@@ -231,11 +196,7 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [
-              Colors.blue[400]!,
-              Colors.blue[600]!,
-              Colors.blue[800]!,
-            ],
+            colors: [Colors.blue[400]!, Colors.blue[600]!, Colors.blue[800]!],
           ),
         ),
         child: SafeArea(
@@ -264,11 +225,7 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                               ),
                             ],
                           ),
-                          child: const Icon(
-                            Icons.health_and_safety,
-                            size: 80,
-                            color: Colors.blue,
-                          ),
+                          child: const Icon(Icons.health_and_safety, size: 80, color: Colors.blue),
                         ),
                       ),
                       const SizedBox(height: 40),
@@ -284,16 +241,10 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                       const SizedBox(height: 16),
                       const Text(
                         'Your Personal Memory Companion',
-                        style: TextStyle(
-                          fontSize: 18,
-                          color: Colors.white,
-                          fontWeight: FontWeight.w300,
-                        ),
+                        style: TextStyle(fontSize: 18, color: Colors.white, fontWeight: FontWeight.w300),
                         textAlign: TextAlign.center,
                       ),
                       const SizedBox(height: 60),
-
-                      // Animated loading indicator
                       RotationTransition(
                         turns: _loadingAnimationController,
                         child: const SizedBox(
@@ -305,10 +256,7 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                           ),
                         ),
                       ),
-
                       const SizedBox(height: 24),
-
-                      // Dynamic status message
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
                         decoration: BoxDecoration(
@@ -317,24 +265,14 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                         ),
                         child: Text(
                           _statusMessage,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w500,
-                          ),
+                          style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w500),
                           textAlign: TextAlign.center,
                         ),
                       ),
-
                       const SizedBox(height: 40),
-
-                      // Version info
                       Text(
                         'Version 2.0.0',
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(0.5),
-                          fontSize: 12,
-                        ),
+                        style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 12),
                       ),
                     ],
                   ),
@@ -355,80 +293,132 @@ class MainApp extends StatefulWidget {
   State<MainApp> createState() => _MainAppState();
 }
 
-class _MainAppState extends State<MainApp> {
+class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
   int _selectedIndex = 0;
   final PageController _pageController = PageController(initialPage: 0);
   final ReminderScheduler _scheduler = ReminderScheduler();
   bool _showBadge = false;
 
-  // Voice Assistant
   late VoiceAssistantService _voiceService;
   bool _showVoiceAssistant = false;
 
-  // Screens list
+  late VirtualCaregiverService _caregiverService;
+  late WakeWordService _wakeWordService;
+  String _patientName = '';
+  bool _isCaregiverActive = false;
+  Timer? _healthCheckTimer;
+
   late final List<Widget> _screens;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _loadPatientName();
     _initVoiceAssistant();
+    _initVirtualCaregiver();
+    _initWakeWordService();
     _checkPendingReminders();
     _scheduler.startScheduler();
 
-    // Initialize screens with callbacks - USING CONSTRUCTOR APPROACH
     _screens = [
       const DashboardScreen(),
-      ActivityCenterScreen(
-        onVoiceAssistantPressed: _showVoiceAssistantDialog,
-      ),
+      ActivityCenterScreen(onVoiceAssistantPressed: _showVoiceAssistantDialog),
       RemindersScreen(),
-      MedicationScreen(
-        onVoiceAssistantPressed: _showVoiceAssistantDialog,
-      ),
+      MedicationScreen(onVoiceAssistantPressed: _showVoiceAssistantDialog),
       const EmergencyScreen(),
-      const ActivityScreen(), // This is the Memory Diary screen
+      const ActivityScreen(),
     ];
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      if (!_wakeWordService.isActive) {
+        _wakeWordService.startListening(_onWakeWordTriggered);
+      }
+    } else if (state == AppLifecycleState.paused) {
+      _wakeWordService.stopListening();
+    }
+  }
+
+  Future<void> _loadPatientName() async {
+    const storage = FlutterSecureStorage();
+    final name = await storage.read(key: StorageKeys.patientName);
+    setState(() => _patientName = name ?? 'Friend');
   }
 
   Future<void> _initVoiceAssistant() async {
     _voiceService = VoiceAssistantService(
-      onRemindersRequest: () {
-        _navigateToScreen(2); // Reminders index
-      },
-      onEmergencyRequest: () {
-        _navigateToScreen(4); // Emergency index
-      },
-      onMedicationRequest: () {
-        _navigateToScreen(3); // Medication index
-      },
-      onActivityRequest: () {
-        _navigateToScreen(5); // Memory Diary index (was Activity)
-      },
-      onMemoryGameRequest: () {
-        _navigateToScreen(1); // Games index
-      },
-      onDashboardRequest: () {
-        _navigateToScreen(0); // Dashboard index
-      },
-      onSettingsRequest: () {
-        _showSettingsFromVoice();
-      },
-      onCallContactRequest: (name) {
-        _handleCallContact(name);
-      },
-      onCustomCommand: (command) {
-        _handleCustomCommand(command);
-      },
+      onRemindersRequest: () => _navigateToScreen(2),
+      onEmergencyRequest: () => _navigateToScreen(4),
+      onMedicationRequest: () => _navigateToScreen(3),
+      onActivityRequest: () => _navigateToScreen(5),
+      onMemoryGameRequest: () => _navigateToScreen(1),
+      onDashboardRequest: () => _navigateToScreen(0),
+      onSettingsRequest: _showSettingsFromVoice,
+      onCallContactRequest: _handleCallContact,
+      onCustomCommand: _handleCustomCommand,
     );
-
     await _voiceService.initialize();
     await _voiceService.requestPermissions();
   }
 
-  void _navigateToScreen(int index) {
-    setState(() {
-      _selectedIndex = index;
+  Future<void> _initVirtualCaregiver() async {
+    _caregiverService = VirtualCaregiverService(
+      onRemindersRequest: () => _navigateToScreen(2),
+      onEmergencyRequest: () => _navigateToScreen(4),
+      onMedicationRequest: () => _navigateToScreen(3),
+      onMemoryDiaryRequest: () => _navigateToScreen(5),
+      onGamesRequest: () => _navigateToScreen(1),
+      onDashboardRequest: () => _navigateToScreen(0),
+      onCallContactRequest: _handleCallContact,
+      onSendMessageRequest: _handleSendMessage,
+      onMoodCheckRequest: _showMoodCheck,
+    );
+    await _caregiverService.initialize();
+    await _caregiverService.requestPermissions();
+  }
+
+  Future<void> _initWakeWordService() async {
+    _wakeWordService = WakeWordService();
+    bool available = await _wakeWordService.initialize(onDebugLog: (msg) => print(msg));
+    if (!available) {
+      print("❌ Wake word service not available");
+      return;
+    }
+    bool hasPermission = await _wakeWordService.requestPermissions();
+    if (!hasPermission) {
+      print("❌ Microphone permission denied");
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Microphone permission needed for voice commands"),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    _wakeWordService.startListening(_onWakeWordTriggered);
+    print("✅ Wake word service initialized");
+
+    _healthCheckTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
+      if (!_wakeWordService.isActive && !_isCaregiverActive && mounted) {
+        print("Wake word not active – restarting...");
+        _wakeWordService.startListening(_onWakeWordTriggered);
+      }
     });
+  }
+
+  void _onWakeWordTriggered() {
+    print(">>> WAKE WORD 'memo' DETECTED <<<");
+    if (!_isCaregiverActive && mounted) {
+      _showVirtualCaregiverManually();
+    }
+  }
+
+  void _navigateToScreen(int index) {
+    setState(() => _selectedIndex = index);
     _pageController.jumpToPage(index);
   }
 
@@ -446,127 +436,152 @@ class _MainAppState extends State<MainApp> {
 
   void _handleCallContact(String name) {
     _voiceService.speak("Calling $name");
-    // Navigate to emergency screen where contacts are shown
-    _navigateToScreen(4); // Go to emergency
+    _navigateToScreen(4);
+  }
+
+  void _handleSendMessage(String message) {
+    print("Send message: $message");
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Message sent: $message'),
+        backgroundColor: Colors.green,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 
   void _handleCustomCommand(String command) {
     if (command.contains('help')) {
       _voiceService.speak(
-          "You can say: open reminders, call emergency, show medications, "
-              "open memory diary, play games, go to dashboard, or open settings"
-      );
+          "You can say: open reminders, call emergency, show medications, open memory diary, play games, go to dashboard, or open settings");
     } else if (command.contains('game') || command.contains('play')) {
-      _navigateToScreen(1); // Navigate to games
+      _navigateToScreen(1);
     } else if (command.contains('diary') || command.contains('memory diary')) {
-      _navigateToScreen(5); // Navigate to memory diary
+      _navigateToScreen(5);
     } else {
       _voiceService.speak("I didn't understand. Say 'help' for commands.");
     }
   }
 
+  void _showMoodCheck() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("How are you feeling?", style: TextStyle(fontWeight: FontWeight.bold)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildMoodOption("Happy", Icons.emoji_emotions, Colors.amber),
+            _buildMoodOption("Calm", Icons.spa, Colors.blue),
+            _buildMoodOption("Sad", Icons.sentiment_dissatisfied, Colors.grey),
+            _buildMoodOption("Anxious", Icons.mood_bad, Colors.orange),
+            _buildMoodOption("Tired", Icons.bedtime, Colors.purple),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMoodOption(String mood, IconData icon, Color color) {
+    return ListTile(
+      leading: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(color: color.withOpacity(0.1), shape: BoxShape.circle),
+        child: Icon(icon, color: color),
+      ),
+      title: Text(mood, style: const TextStyle(fontWeight: FontWeight.w600)),
+      onTap: () {
+        Navigator.pop(context);
+        _caregiverService.speak(
+          "I hope you feel better soon. Would you like to do something to improve your mood?",
+          mood: CaregiverMood.encouraging,
+        );
+        if (mood == "Sad" || mood == "Anxious") {
+          _showSoothingActivitySuggestion();
+        }
+      },
+    );
+  }
+
+  void _showSoothingActivitySuggestion() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Feeling better?"),
+        content: const Text(
+          "Would you like to try a calming activity?\n\n"
+              "• Play a relaxing memory game\n"
+              "• Add to your memory diary\n"
+              "• Listen to soothing music\n"
+              "• Take a gentle walk reminder",
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Maybe later")),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _navigateToScreen(1);
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.purple, foregroundColor: Colors.white),
+            child: const Text("Play a game"),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _checkPendingReminders() async {
-    // Check if there are any pending reminders
     const storage = FlutterSecureStorage();
     final remindersData = await storage.read(key: StorageKeys.patientReminders);
     if (remindersData != null) {
-      // Parse and check for incomplete reminders
-      // This is simplified - you'd want to actually parse and check
-      setState(() {
-        _showBadge = true;
-      });
+      setState(() => _showBadge = true);
     }
   }
 
   Widget _buildBadge() {
     if (!_showBadge) return const SizedBox.shrink();
-
     return Container(
       width: 10,
       height: 10,
-      decoration: const BoxDecoration(
-        color: Colors.red,
-        shape: BoxShape.circle,
-      ),
+      decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
     );
   }
 
-  // Updated navigation items with "Memory Diary" as the last option
-  List<BottomNavigationBarItem> get _navItems {
-    return [
-      const BottomNavigationBarItem(
-        icon: Icon(Icons.dashboard),
-        activeIcon: Icon(Icons.dashboard),
-        label: 'Dashboard',
+  List<BottomNavigationBarItem> get _navItems => [
+    const BottomNavigationBarItem(icon: Icon(Icons.dashboard), activeIcon: Icon(Icons.dashboard), label: 'Dashboard'),
+    const BottomNavigationBarItem(icon: Icon(Icons.extension), activeIcon: Icon(Icons.extension), label: 'Games'),
+    BottomNavigationBarItem(
+      icon: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          const Icon(Icons.notifications),
+          Positioned(right: -4, top: -4, child: _buildBadge()),
+        ],
       ),
-      const BottomNavigationBarItem(
-        icon: Icon(Icons.extension),
-        activeIcon: Icon(Icons.extension),
-        label: 'Games',
+      activeIcon: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          const Icon(Icons.notifications),
+          Positioned(right: -2, top: -2, child: _buildBadge()),
+        ],
       ),
-      BottomNavigationBarItem(
-        icon: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            const Icon(Icons.notifications),
-            Positioned(
-              right: -4,
-              top: -4,
-              child: _buildBadge(),
-            ),
-          ],
-        ),
-        activeIcon: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            const Icon(Icons.notifications),
-            Positioned(
-              right: -2,
-              top: -2,
-              child: _buildBadge(),
-            ),
-          ],
-        ),
-        label: 'Reminders',
-      ),
-      const BottomNavigationBarItem(
-        icon: Icon(Icons.medication),
-        activeIcon: Icon(Icons.medication),
-        label: 'Medication',
-      ),
-      const BottomNavigationBarItem(
-        icon: Icon(Icons.emergency),
-        activeIcon: Icon(Icons.emergency),
-        label: 'Emergency',
-      ),
-      const BottomNavigationBarItem(
-        icon: Icon(Icons.menu_book), // Changed from Icons.directions_run
-        activeIcon: Icon(Icons.menu_book),
-        label: 'Memory', // Changed from 'Activity'
-      ),
-    ];
-  }
+      label: 'Reminders',
+    ),
+    const BottomNavigationBarItem(icon: Icon(Icons.medication), activeIcon: Icon(Icons.medication), label: 'Medication'),
+    const BottomNavigationBarItem(icon: Icon(Icons.emergency), activeIcon: Icon(Icons.emergency), label: 'Emergency'),
+    const BottomNavigationBarItem(icon: Icon(Icons.menu_book), activeIcon: Icon(Icons.menu_book), label: 'Memory'),
+  ];
 
   void _onItemTapped(int index) {
     setState(() {
       _selectedIndex = index;
-      // Hide badge when reminders screen is opened
-      if (index == 2) {
-        _showBadge = false;
-      }
+      if (index == 2) _showBadge = false;
     });
-    _pageController.animateToPage(
-      index,
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeInOut,
-    );
+    _pageController.animateToPage(index, duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
   }
 
   void _showVoiceAssistantDialog() {
-    setState(() {
-      _showVoiceAssistant = true;
-    });
-
+    setState(() => _showVoiceAssistant = true);
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -574,10 +589,44 @@ class _MainAppState extends State<MainApp> {
         service: _voiceService,
         onClose: () {
           Navigator.pop(context);
-          setState(() {
-            _showVoiceAssistant = false;
-          });
+          setState(() => _showVoiceAssistant = false);
         },
+      ),
+    );
+  }
+
+  void _showVirtualCaregiverManually() {
+    if (_isCaregiverActive) return;
+    setState(() => _isCaregiverActive = true);
+    _wakeWordService.stopListening();
+
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (context) => WillPopScope(
+        onWillPop: () async {
+          setState(() => _isCaregiverActive = false);
+          Future.delayed(const Duration(milliseconds: 500), () {
+            if (mounted && !_wakeWordService.isActive) {
+              _wakeWordService.startListening(_onWakeWordTriggered);
+            }
+          });
+          return true;
+        },
+        child: VirtualCaregiverWidget(
+          service: _caregiverService,
+          onClose: () {
+            setState(() => _isCaregiverActive = false);
+            Navigator.pop(context);
+            Future.delayed(const Duration(milliseconds: 500), () {
+              if (mounted && !_wakeWordService.isActive) {
+                _wakeWordService.startListening(_onWakeWordTriggered);
+              }
+            });
+          },
+          patientName: _patientName,
+          autoGreet: true,
+        ),
       ),
     );
   }
@@ -590,23 +639,14 @@ class _MainAppState extends State<MainApp> {
         onPageChanged: (index) {
           setState(() {
             _selectedIndex = index;
-            // Hide badge when reminders screen is opened
-            if (index == 2) {
-              _showBadge = false;
-            }
+            if (index == 2) _showBadge = false;
           });
         },
         children: _screens,
       ),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.1),
-              blurRadius: 10,
-              offset: const Offset(0, -2),
-            ),
-          ],
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, -2))],
         ),
         child: BottomNavigationBar(
           type: BottomNavigationBarType.fixed,
@@ -622,24 +662,18 @@ class _MainAppState extends State<MainApp> {
           iconSize: 22,
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: _showVoiceAssistant ? Colors.green : Colors.blue[600],
-        onPressed: _showVoiceAssistantDialog,
-        child: Icon(
-          _showVoiceAssistant ? Icons.voice_chat : Icons.mic,
-          color: Colors.white,
-        ),
-        mini: true,
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
     );
   }
 
   @override
   void dispose() {
+    _healthCheckTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
     _pageController.dispose();
     _scheduler.stopScheduler();
+    _wakeWordService.dispose();
     _voiceService.dispose();
+    _caregiverService.dispose();
     super.dispose();
   }
 }
